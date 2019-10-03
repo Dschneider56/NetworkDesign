@@ -1,36 +1,41 @@
 from socket import *
+from packet_functions import *
 # PIL is used for image support in this program.
 from PIL import Image
 import base64
 import io
+class Client:
+    """
+    A client -object
+    """
+    def __init__(self):
+        """
+        Send data to some server, then request data back from the server.
+        """
+        server_name = '127.0.0.1'   # server address; it is the local host in this case
+        server_port = 12000         # server port number
+        client_socket = socket(AF_INET, SOCK_DGRAM)
 
-# Set server to localhost:12000
-serverName = 'localhost'
-serverPort = 12000
-# Create client socket
-# AF_INET specifies an IPv4, SOCK_DGRAM specifies UDP connection (not TCP)
-clientSocket = socket(AF_INET, SOCK_DGRAM)
-# Prompt user for input string to pass to server
-fileName = input('Input file name:')
-with open(fileName, "rb") as image:
-    # Open the original image
-    read_img = image.read()
-    img = Image.open(io.BytesIO(read_img))
-    img.show()
+        with open('sample.png', 'rb') as image:         # open the file to be transmitted
+            message = image.read()
 
-# Encode original image to send to server
-image_64_encode = base64.encodebytes(read_img)
+        self.packets = make_packet(message)
 
-# Send file to the server
-clientSocket.sendto(image_64_encode, (serverName, serverPort))
+        send_packets(client_socket, self.packets, (server_name, server_port))
 
-# Await response from server
-serverImage, serverAddress = clientSocket.recvfrom(8192)
+        # THIS WORKS!!
+        #for packet in self.packets:
+        #    client_socket.sendto(packet, (server_name, server_port))
+        #    print(f'client sent: {packet}')
+        #    client_socket.recvfrom(len(TERMINATE))
+        #
+        #client_socket.sendto(TERMINATE, (server_name, server_port))
+        #client_socket.recvfrom(len(TERMINATE))
 
-# display the greyscale image that came back from the server
-modifiedImage = base64.decodebytes(serverImage)
-display_image = Image.open(io.BytesIO(modifiedImage))
-display_image.show()
-# Close the client
-clientSocket.close()
+        # print("CLIENT - Data to be sent to Server: {}".format(message))
+        # client_socket.sendto(message, (server_name, server_port))       #send the message to the server
+#
+        # received_message, server_address = client_socket.recvfrom(200000)    # receive what the server sends back
+        # print("CLIENT - Data received from Server: {}".format(received_message))
 
+        client_socket.close()
