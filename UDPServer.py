@@ -1,31 +1,51 @@
-from socket import *
+import io
+from PIL import Image, ImageFile
 from packet_functions import *
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # Allow truncated images to be shown
 
-class Server:
-    """
-    awaits data from the client, and creates an image file with the data it received
-    """
+
+class UDPServer:
     def __init__(self):
-        server_port = 12000         # server port number
+        """
+        receives data from the client, and creates a new image file that is a grayscale copy of the original
+        """
+        server_port = 12000  # server port number
         server_socket = socket(AF_INET, SOCK_DGRAM)
-        self.data = []
+        data = []
         try:
-            server_socket.bind(('', server_port))   # bind the socket to an address
+            server_socket.bind(('', server_port))  # bind the socket to an address
         except Exception as e:
             print("SERVER - Server failed to initialize: {}".format(e))
-            return
+            exit(0)
 
         print("SERVER - Server ready to receive.")
         while True:
-           ##THIS WORKS!
-            message, client_address = server_socket.recvfrom(PACKET_SIZE)    # receive the data and client address from client
-            server_socket.sendto(TERMINATE, client_address)  # send ACK to the client
-            self.data.append(message)
-            if message == TERMINATE:
-                print(f'server got: {self.data}')
-                print("SERVER - Data received from Client: {}".format(message))
+            # Receive packets from the client
+            packets, clientAddress = receive_packets(server_socket)
+            print('SERVER - All packets have been received')
 
-           # packets, client_address = receive_packets(server_socket)
-           # print(f'server got: {self.data}')
-           # send_packets(server_socket, packets, (client_address, server_port))
+            # Join the packets to a bytes object
+            image = b''.join(packets)
+
+            # Convert the file to grayscale
+            grayImage = Image.open(io.BytesIO(image))
+            print('SERVER - Image received and can be opened')
+            print('SERVER - Converting image to grayscale')
+            grayImage = grayImage.convert('L')
+
+            # Save new file so we can read and create new packets to send back to the client
+            grayImage.save('sample-gray.bmp', 'bmp')
+            with open('sample-gray.bmp', "rb") as showImage:
+                read_img = showImage.read()
+
+                # Create packets to send to the client
+                print("SERVER - Creating packets")
+                packets = make_packet(read_img)
+
+                # Send new packets to the client
+                send_packets(server_socket, packets, clientAddress)
+
+
+if __name__ == '__main__':
+    UDPServer()

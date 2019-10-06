@@ -1,41 +1,49 @@
-from socket import *
+import socket
 from packet_functions import *
-# PIL is used for image support in this program.
-from PIL import Image
-import base64
+from PIL import Image, ImageFile    # PIL is used for image support in this program.
 import io
-class Client:
-    """
-    A client -object
-    """
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # Allow for truncated images to be shown instead of raising exception.
+
+
+class UDPClient:
     def __init__(self):
         """
-        Send data to some server, then request data back from the server.
+        Send an image to server, then request a modified image back from the server.
         """
-        server_name = '127.0.0.1'   # server address; it is the local host in this case
-        server_port = 12000         # server port number
+        server_address = '127.0.0.1'  # server address; it is the local host in this case
+        server_port = 12000  # server port number
         client_socket = socket(AF_INET, SOCK_DGRAM)
 
-        with open('sample.png', 'rb') as image:         # open the file to be transmitted
+        # Open and show the original image
+        with open('island.jpg', 'rb') as image:  # open the file to be transmitted
             message = image.read()
+            img = Image.open(io.BytesIO(message))
+            #img.show()
 
-        self.packets = make_packet(message)
+        # Convert the image to packets
+        print("CLIENT - Creating packets")
+        packets = make_packet(message)
 
-        send_packets(client_socket, self.packets, (server_name, server_port))
+        # Send the packets to the server
+        print("CLIENT - Sending packets:")
+        send_packets(client_socket, packets, (server_address, server_port))
+        print("CLIENT - Finished sending packets")
 
-        # THIS WORKS!!
-        #for packet in self.packets:
-        #    client_socket.sendto(packet, (server_name, server_port))
-        #    print(f'client sent: {packet}')
-        #    client_socket.recvfrom(len(TERMINATE))
-        #
-        #client_socket.sendto(TERMINATE, (server_name, server_port))
-        #client_socket.recvfrom(len(TERMINATE))
+        # Await for packets coming back from the server
+        packets, server_address = receive_packets(client_socket)
 
-        # print("CLIENT - Data to be sent to Server: {}".format(message))
-        # client_socket.sendto(message, (server_name, server_port))       #send the message to the server
-#
-        # received_message, server_address = client_socket.recvfrom(200000)    # receive what the server sends back
-        # print("CLIENT - Data received from Server: {}".format(received_message))
+        # Join the packets back to a bytes object
+        print('CLIENT - All packets have been received from the server')
+        data = b''.join(packets)
+        # Open the grayscale image to confirm the server could modify the original
+        image = Image.open(io.BytesIO(data))
+        print('CLIENT - Packets have been converted back to an image')
+        image.show()
 
+        # Close the client
         client_socket.close()
+
+
+if __name__ == '__main__':
+    UDPClient()

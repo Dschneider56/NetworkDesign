@@ -1,7 +1,8 @@
-from UDPClient import Client
-from UDPServer import Server
+from UDPClient import UDPClient
+from UDPServer import UDPServer
 from threading import Thread
 
+
 if __name__ == '__main__':
-    Thread(target=Server).start()   # Create server thread
-    Client()    # Create client object
+    Thread(target=UDPServer).start()   # Create server thread
+    UDPClient()    # Create client object
