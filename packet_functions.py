@@ -2,7 +2,7 @@ from socket import *
 
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
-PACKET_SIZE = 2048      # Size of a packet in bytes.
+PACKET_SIZE = 1024      # Size of a packet in bytes.
 TERMINATE = b'\r\n'     # The terminator character sequence.
 
 
@@ -32,7 +32,6 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
         sock.sendto(packet, addr_and_port)       # Send the packet
         short_sleep()
 
-    # print("Sending terminate statement:")
     sock.sendto(TERMINATE, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening
 
 
@@ -48,12 +47,9 @@ def receive_packets(sock: socket):
     while True:
         message, return_address = sock.recvfrom(PACKET_SIZE)
         if message == TERMINATE:
-            # print('Received terminate statement')
             return packets, return_address
         else:
-            # print('\nPacket received:')
             packets.append(message)
-            # print(message)
 
 
 def make_packet(data: bytes) -> list:

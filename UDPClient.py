@@ -1,9 +1,7 @@
 import socket
 from packet_functions import *
-from PIL import Image, ImageFile    # PIL is used for image support in this program.
+from PIL import Image   # PIL is used for image support in this program.
 import io
-
-ImageFile.LOAD_TRUNCATED_IMAGES = True  # Allow for truncated images to be shown instead of raising exception.
 
 
 class UDPClient:
@@ -16,10 +14,10 @@ class UDPClient:
         client_socket = socket(AF_INET, SOCK_DGRAM)
 
         # Open and show the original image
-        with open('island.jpg', 'rb') as image:  # open the file to be transmitted
+        with open('island.bmp', 'rb') as image:  # open the file to be transmitted
             message = image.read()
             img = Image.open(io.BytesIO(message))
-            #img.show()
+            img.show()
 
         # Convert the image to packets
         print("CLIENT - Creating packets")
