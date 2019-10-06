@@ -3,35 +3,33 @@ from packet_functions import *
 from PIL import Image, ImageFile    # PIL is used for image support in this program.
 import io
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True  # Allow for truncated images to be shown instead of raising exception.
-
 
 class UDPClient:
-    def __init__(self):
+    def __init__(self, file_name: str = 'island.jpg'):
         """
         Send an image to server, then request a modified image back from the server.
         """
-        server_address = '127.0.0.1'  # server address; it is the local host in this case
-        server_port = 12000  # server port number
-        client_socket = socket(AF_INET, SOCK_DGRAM)
+        self.file_name = file_name      # The name of the file to be opened.
+        self.message = b''
+        server_address = '127.0.0.1'    # server address; it is the local host in this case
+        server_port = 12000             # server port number
+        self.addr_and_port = (server_address, server_port)
+        self.client_socket = socket(AF_INET, SOCK_DGRAM)
 
         # Open and show the original image
-        with open('island.jpg', 'rb') as image:  # open the file to be transmitted
-            message = image.read()
-            img = Image.open(io.BytesIO(message))
-            #img.show()
 
+        self.open_image(file_name)
         # Convert the image to packets
         print("CLIENT - Creating packets")
-        packets = make_packet(message)
+        self.packets = make_packet(self.message)
 
         # Send the packets to the server
         print("CLIENT - Sending packets:")
-        send_packets(client_socket, packets, (server_address, server_port))
+        send_packets(self.client_socket, self.packets, self.addr_and_port)
         print("CLIENT - Finished sending packets")
 
         # Await for packets coming back from the server
-        packets, server_address = receive_packets(client_socket)
+        packets, server_address = receive_packets(self.client_socket)
 
         # Join the packets back to a bytes object
         print('CLIENT - All packets have been received from the server')
@@ -42,7 +40,24 @@ class UDPClient:
         image.show()
 
         # Close the client
-        client_socket.close()
+        self.client_socket.close()
+
+    def open_image(self, file_name: str):
+        with open(self.file_name, 'rb') as image:  # open the file to be transmitted
+            self.message = image.read()
+            img = Image.open(io.BytesIO(self.message))
+            #img.show()
+
+    def __del__(self):
+        """
+        Destructor
+
+        :return:    None
+        """
+        del self.file_name
+        del self.message
+
+
 
 
 if __name__ == '__main__':
