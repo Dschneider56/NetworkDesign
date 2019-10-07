@@ -21,7 +21,7 @@ class UDPServer:
     def listen(self):
         while True:
             # Receive packets from the client
-            packets, clientAddress = receive_packets(self.server_socket)
+            packets, client_address = receive_packets(self.server_socket)
             print('SERVER - All packets have been received')
 
             # Join the packets to a bytes object
@@ -36,16 +36,16 @@ class UDPServer:
                 packets = make_packet(read_img)
 
                 # Send new packets to the client
-                send_packets(self.server_socket, packets, clientAddress)
+                send_packets(self.server_socket, packets, client_address)
 
     def create_grayscale_img(self, image: bytes):
         # Convert the file to grayscale
-        grayImage = Image.open(io.BytesIO(image))
+        gray_image = Image.open(io.BytesIO(image))
         print('SERVER - Image received and can be opened; converting image to grayscale')
-        grayImage = grayImage.convert('L')
+        gray_image = gray_image.convert('L')
 
         # Save new file so we can read and create new packets to send back to the client
-        grayImage.save('sample-gray.bmp', 'bmp')
+        gray_image.save('sample-gray.bmp', 'bmp')
 
     def __del__(self):
         """

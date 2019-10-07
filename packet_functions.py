@@ -1,20 +1,10 @@
 from socket import *
+from time import sleep
 
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
 PACKET_SIZE = 2048      # Size of a packet in bytes.
 TERMINATE = b'\r\n'     # The terminator character sequence.
-
-
-def short_sleep():
-    """
-    Short delay to be added between packet sends.
-
-    :return:    None
-    """
-    for i in range(70):
-        for j in range(100):
-            continue
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple):
@@ -30,7 +20,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     for packet in packets:
         # print(packet)
         sock.sendto(packet, addr_and_port)      # Send the packet.
-        short_sleep()                           # Wait for a very short amount of time.
+        sleep(0.0001)                           # Small delay so receiver is not overloaded.
 
     # print("Sending terminate statement:")
     sock.sendto(TERMINATE, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
@@ -48,7 +38,7 @@ def receive_packets(sock: socket):
     while True:
         message, return_address = sock.recvfrom(PACKET_SIZE)    # Receive a chunk of data of up to size 'PACKET_SIZE'.
 
-        if message == TERMINATE:    # If the TERMINATE character sequence is received, then the transission is complete.
+        if message == TERMINATE:    # If the TERMINATE character sequence is received, then the transition is complete.
             # print('Received terminate statement')
             return packets, return_address
         else:
