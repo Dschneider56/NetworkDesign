@@ -5,7 +5,7 @@ import io
 
 
 class UDPClient:
-    def __init__(self, file_name: str = 'island.jpg'):
+    def __init__(self, file_name: str = 'island.bmp'):
         """
         Send an image to server, then request a modified image back from the server.
         """
