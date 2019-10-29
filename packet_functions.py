@@ -6,7 +6,7 @@ from time import sleep
 SEQNUM_SIZE = 1         # Size of sequence number in bytes.
 CHKSUM_SIZE = 24        # Size of checksum in bytes.
 PACKET_SIZE = 2048      # Size of a packet in bytes.
-TERMINATE = b'\r\n'     # The terminator character sequence.
+ACK = b'\r\n'     # The terminator character sequence.
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple):
@@ -25,7 +25,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
         sleep(0.01)                           # Small delay so receiver is not overloaded.
 
     # print("Sending terminate statement:")
-    sock.sendto(TERMINATE, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
+    sock.sendto(ACK, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -36,9 +36,12 @@ def parse_packet(raw_data: bytes) -> tuple:
 
     :return: A tuple containing the sequence number, checksum, and packet contents
     """
-    seqnum = raw_data[:-SEQNUM_SIZE]
+    seqnum = raw_data[-SEQNUM_SIZE:]
     chksum = raw_data[-CHKSUM_SIZE:-SEQNUM_SIZE]
     data = raw_data[:PACKET_SIZE]
+    #print(data)
+    #print(chksum)
+    #print(seqnum)
     return data, chksum, seqnum
 
 
@@ -54,12 +57,12 @@ def receive_packets(sock: socket) -> tuple:
     while True:
         raw_data, return_address = sock.recvfrom(PACKET_SIZE + CHKSUM_SIZE + SEQNUM_SIZE)  # Receive a packet
 
-        packet = parse_packet(raw_data)
+        data, chksum, seqnum = parse_packet(raw_data)
 
-        if raw_data == TERMINATE:    # If the TERMINATE character sequence is received, transition is complete.
+        if raw_data == ACK:    # If the TERMINATE character sequence is received, transition is complete.
             return packets, return_address
         else:
-            packets.append(raw_data)     # Add the received packet to a list and repeat.
+            packets.append(data)     # Add the received packet to a list and repeat.
 
 
 def make_packet(data: bytes) -> list:
@@ -75,29 +78,31 @@ def make_packet(data: bytes) -> list:
     seqnum = 1
     while len(data) > 0:                                # Keep appending the packets to the packet list.
         try:
-            raw_packet = data[:PACKET_SIZE]                     # Extract the first "PACKET_SIZE" bytes into packet.
+            raw_packet = data[:PACKET_SIZE]                         # Extract the first "PACKET_SIZE" bytes into packet.
             data = data[PACKET_SIZE:]
         except IndexError:
-            raw_packet = data                                   # In this case, the remaining data is less than a packet
-            data = []                                           # set the data to an empty list to break from loop.
+            raw_packet = data                                       # Case where remaining data is less than a packet
+            data = []                                               # set the data to an empty list to break from loop.
 
-        chksum = bytes(format(sum(raw_packet), '024b'),         # Create a checksum for the packet.
-                       'utf-8')
-        seqnum = bytes(str(seqnum ^ 1), 'utf-8')                # Create an alternating sequence number.
+        chksum = bytes(format(sum(raw_packet), '024b'), 'utf-8')    # Create a checksum for the packet.
 
-        print(seqnum)
-        print(chksum)
+        seqnum = bytes(str(seqnum ^ 1), 'utf-8')                    # Create an alternating sequence number. Note the
+                                                                    # cast to bytes requires a string object.
 
-        packet = raw_packet + chksum + seqnum                   # Combine seqnum, chksum, & raw_packet into packet
+        # print(seqnum)
+        # print(chksum)
+
+        packet = raw_packet + chksum + seqnum                       # Combine seqnum, chksum, & raw_packet into packet
         packets.append(packet)
 
-        seqnum = int(seqnum)
+        seqnum = int(seqnum)                    # Cast back to int so XOR operation can be done again.
     return packets
 
 # --------------------------------------- OLD FUNCTIONS BEFORE MODIFICATION ------------------------------------------ #
-# To restore these functions, simply remove the _OLD suffix and add it to the function above to change out.
+# To restore these functions, simply remove the _old suffix and add it to the function above to change out.
 
-def receive_packets_OLD(sock: socket) -> tuple:
+
+def receive_packets_old(sock: socket) -> tuple:
     """
     Listen for packets coming in to a socket.
 
@@ -109,7 +114,7 @@ def receive_packets_OLD(sock: socket) -> tuple:
     while True:
         message, return_address = sock.recvfrom(PACKET_SIZE)    # Receive a chunk of data of up to size 'PACKET_SIZE'.
 
-        if message == TERMINATE:    # If the TERMINATE character sequence is received, then the transition is complete.
+        if message == ACK:    # If the TERMINATE character sequence is received, then the transition is complete.
             # print('Received terminate statement')
             return packets, return_address
         else:
@@ -118,7 +123,7 @@ def receive_packets_OLD(sock: socket) -> tuple:
             # print(message)
 
 
-def make_packet_OLD(data: bytes) -> list:
+def make_packet_old(data: bytes) -> list:
     """
     Given a byte array, split it up into packets of a certain size containing the data, a checksum,
     and a sequence number.
@@ -129,7 +134,6 @@ def make_packet_OLD(data: bytes) -> list:
     """
     packets: list = []
     seqnum = 1
-    packets: list = []
     while len(data) >= PACKET_SIZE:             # Keep appending the packets to the packet list
         packets.append(data[:PACKET_SIZE])      # Take up to 'PACKET_SIZE' bytes and add that packet to a list
         data = data[PACKET_SIZE:]               # Remove that data from the buffer and repeat above step
