@@ -28,23 +28,24 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     print(initializer)
     sock.sendto(initializer, addr_and_port)  # Every packet has been sent, signal the recipient to stop listening.
     for i in range(0, (len(packets))):
-        ack = -1
+        ack = (i + 1) % 2
+        received_ack = -1
         sock.sendto(packets[i], addr_and_port)      # Send the packet.
         sleep(0.005)                           # Small delay so receiver is not overloaded.
 
-        # TODO Uncomment and complete code segment for receiving ack and checksum
-        # received_data = sock.recvfrom(1)  # Receive a ack
-        # received_ack = received_data[:1]
-        # received_checksum = received_data[1:]
+        # Process ack and checksum from receiver
+        received_data, return_address = sock.recvfrom(25)  # Receive a ack
+        received_ack = int(received_data[:1])
+        received_checksum = str(received_data[1:])
 
-        # if (ack == received_ack) and (str(received_checksum) == "111111111111111111111111"):
-        #     print("Ack and checksum received")
-        # elif ack < 0:
-        #     i -= 1  # If ack does not change, subtract 1 from i and resend that packet
-        #     print("ACK not received from packet " + str((i + 1)) + ", resending data")
-        # elif ack != ((i + 1) % 2):
-        #     i -= 1                            # If ack does not change, subtract 1 from i and resend that packet
-        #     print("Invalid ack received from packet " + str((i+1)) + ", resending data")
+        if (received_ack == ack) and (received_checksum == "b'111111111111111111111111'"):
+            print("ACK and Checksum received")
+        elif received_ack != ack:
+            i -= 1  # If ack does not change, subtract 1 from i and resend that packet
+            print("invalid ack from packet " + str((i + 1)) + ", resending data")
+        elif received_checksum != "b'111111111111111111111111'":
+            i -= 1                            # If ack does not change, subtract 1 from i and resend that packet
+            print("Invalid checksum received from packet " + str((i+1)) + ", resending data")
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -92,9 +93,10 @@ def receive_packets(sock: socket) -> tuple:
 
             if ack != int(seqnum):
                 print("Error, ack is invalid")
-                # TODO uncomment and send response to sender when ack is incorrect
-                # result = "0"
-                # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                # Send response to sender when ack is incorrect
+                result = "0"
+                sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                packets_received -= 1
 
 
             else:
@@ -122,13 +124,14 @@ def receive_packets(sock: socket) -> tuple:
 
                 if result != "111111111111111111111111":
                     print("Error, checksums do not match")
-                    # TODO uncomment and send response back to sender for invalid checksum
-                    # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                    # Send response back to sender for invalid checksum
+                    sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                    packets_received -= 1
 
                 else:
                     packets.append(data)     # Add the received packet to a list and repeat.
-                    # TODO uncomment and send response back to sender when everything is correct
-                    # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                    # Send response back to sender when everything is correct
+                    sock.sendto(bytes(str(ack), 'utf-8') + (bytes(result, 'utf-8')), return_address)
                     if packets_received == num_packets:
                         print("Finished receiving packets -------------------------")
                         return packets, return_address
