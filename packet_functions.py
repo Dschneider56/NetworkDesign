@@ -1,12 +1,12 @@
+import sys
 from socket import *
 from time import sleep
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
 
-SEQNUM_SIZE = 1         # Size of sequence number in bytes.
 CHKSUM_SIZE = 24        # Size of checksum in bytes.
 PACKET_SIZE = 2048      # Size of a packet in bytes.
-ACK = b'\r\n'     # The terminator character sequence.
+TERMINATE = b'\r\n'     # The terminator character sequence.
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple):
@@ -25,7 +25,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
         sleep(0.01)                           # Small delay so receiver is not overloaded.
 
     # print("Sending terminate statement:")
-    sock.sendto(ACK, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
+    sock.sendto(TERMINATE, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -36,9 +36,10 @@ def parse_packet(raw_data: bytes) -> tuple:
 
     :return: A tuple containing the sequence number, checksum, and packet contents
     """
-    seqnum = raw_data[-SEQNUM_SIZE:]
-    chksum = raw_data[-CHKSUM_SIZE:-SEQNUM_SIZE]
+
     data = raw_data[:PACKET_SIZE]
+    chksum = raw_data[PACKET_SIZE: PACKET_SIZE + CHKSUM_SIZE]
+    seqnum = raw_data[PACKET_SIZE + CHKSUM_SIZE:]
     #print(data)
     #print(chksum)
     #print(seqnum)
@@ -55,11 +56,14 @@ def receive_packets(sock: socket) -> tuple:
     """
     packets = []
     while True:
-        raw_data, return_address = sock.recvfrom(PACKET_SIZE + CHKSUM_SIZE + SEQNUM_SIZE)  # Receive a packet
+        raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
 
         data, chksum, seqnum = parse_packet(raw_data)
 
-        if raw_data == ACK:    # If the TERMINATE character sequence is received, transition is complete.
+        print("seq num: " + str(seqnum))
+        print("recieved: " + str(chksum))
+
+        if raw_data == TERMINATE:    # If the TERMINATE character sequence is received, transition is complete.
             return packets, return_address
         else:
             packets.append(data)     # Add the received packet to a list and repeat.
@@ -75,7 +79,7 @@ def make_packet(data: bytes) -> list:
     :return:        A list of packets.
     """
     packets: list = []
-    seqnum = 1
+    seqnum = int(0)
     while len(data) > 0:                                # Keep appending the packets to the packet list.
         try:
             raw_packet = data[:PACKET_SIZE]                         # Extract the first "PACKET_SIZE" bytes into packet.
@@ -86,13 +90,14 @@ def make_packet(data: bytes) -> list:
 
         chksum = bytes(format(sum(raw_packet), '024b'), 'utf-8')    # Create a checksum for the packet.
 
-        seqnum = bytes(str(seqnum ^ 1), 'utf-8')                    # Create an alternating sequence number. Note the
+        seqnum = bytes(str(seqnum + 1), 'utf-8')                 # Create an alternating sequence number. Note the
                                                                     # cast to bytes requires a string object.
+        print("seq num: ")
+        print(seqnum)
+        print("sent: ")
+        print(chksum)
 
-        # print(seqnum)
-        # print(chksum)
-
-        packet = raw_packet + chksum + seqnum                       # Combine seqnum, chksum, & raw_packet into packet
+        packet = raw_packet + chksum + seqnum                      # Combine seqnum, chksum, & raw_packet into packet
         packets.append(packet)
 
         seqnum = int(seqnum)                    # Cast back to int so XOR operation can be done again.
@@ -114,7 +119,7 @@ def receive_packets_old(sock: socket) -> tuple:
     while True:
         message, return_address = sock.recvfrom(PACKET_SIZE)    # Receive a chunk of data of up to size 'PACKET_SIZE'.
 
-        if message == ACK:    # If the TERMINATE character sequence is received, then the transition is complete.
+        if message == TERMINATE:    # If the TERMINATE character sequence is received, then the transition is complete.
             # print('Received terminate statement')
             return packets, return_address
         else:
