@@ -1,12 +1,13 @@
-import sys
 from socket import *
 from time import sleep
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
 
-CHKSUM_SIZE = 24        # Size of checksum in bytes.
+SEQNUM_SIZE = 1         # Size of sequence number in bytes.
+CHECKSUM_SIZE = 24        # Size of checksum in bytes.
 PACKET_SIZE = 2048      # Size of a packet in bytes.
-TERMINATE = b'\r\n'     # The terminator character sequence.
+INITIALIZE = b'\r\n'     # The terminator character sequence.
+TERMINATE = b'\r\n'
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple):
@@ -19,13 +20,31 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
 
     :return:                None
     """
-    for packet in packets:
-        # print(packet)
-        sock.sendto(packet, addr_and_port)      # Send the packet.
-        sleep(0.01)                           # Small delay so receiver is not overloaded.
 
-    # print("Sending terminate statement:")
-    sock.sendto(TERMINATE, addr_and_port)    # Every packet has been sent, signal the recipient to stop listening.
+    # print("Sending initialization statement:")
+    print(len(packets))
+    initializer = bytes(str(INITIALIZE) + str(len(packets)), 'utf-8')
+    print("INITIALIZER ----------------------")
+    print(initializer)
+    sock.sendto(initializer, addr_and_port)  # Every packet has been sent, signal the recipient to stop listening.
+    for i in range(0, (len(packets))):
+        ack = -1
+        sock.sendto(packets[i], addr_and_port)      # Send the packet.
+        sleep(0.005)                           # Small delay so receiver is not overloaded.
+
+        # TODO Uncomment and complete code segment for receiving ack and checksum
+        # received_data = sock.recvfrom(1)  # Receive a ack
+        # received_ack = received_data[:1]
+        # received_checksum = received_data[1:]
+
+        # if (ack == received_ack) and (str(received_checksum) == "111111111111111111111111"):
+        #     print("Ack and checksum received")
+        # elif ack < 0:
+        #     i -= 1  # If ack does not change, subtract 1 from i and resend that packet
+        #     print("ACK not received from packet " + str((i + 1)) + ", resending data")
+        # elif ack != ((i + 1) % 2):
+        #     i -= 1                            # If ack does not change, subtract 1 from i and resend that packet
+        #     print("Invalid ack received from packet " + str((i+1)) + ", resending data")
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -37,13 +56,11 @@ def parse_packet(raw_data: bytes) -> tuple:
     :return: A tuple containing the sequence number, checksum, and packet contents
     """
 
-    data = raw_data[:PACKET_SIZE]
-    chksum = raw_data[PACKET_SIZE: PACKET_SIZE + CHKSUM_SIZE]
-    seqnum = raw_data[PACKET_SIZE + CHKSUM_SIZE:]
-    #print(data)
-    #print(chksum)
-    #print(seqnum)
-    return data, chksum, seqnum
+    seqnum = raw_data[-SEQNUM_SIZE:]
+    checksum = raw_data[-CHECKSUM_SIZE - SEQNUM_SIZE:-SEQNUM_SIZE]
+    data = raw_data[:(- CHECKSUM_SIZE - SEQNUM_SIZE)]
+
+    return data, checksum, seqnum
 
 
 def receive_packets(sock: socket) -> tuple:
@@ -55,18 +72,66 @@ def receive_packets(sock: socket) -> tuple:
     :return:        the packets along with the address of the sender
     """
     packets = []
+    packets_received = 0
+    num_packets = 0
     while True:
         raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
 
-        data, chksum, seqnum = parse_packet(raw_data)
-
-        print("seq num: " + str(seqnum))
-        print("recieved: " + str(chksum))
-
-        if raw_data == TERMINATE:    # If the TERMINATE character sequence is received, transition is complete.
-            return packets, return_address
+        if raw_data[:7] == bytes(str(INITIALIZE), 'utf-8'):    # If the INITIALIZE character sequence is received, set up for loop.
+            print("RECEIVED INITIALIZATION STATEMENT")
+            # store the number of packets to be received
+            num_packets = int(raw_data[7:])
+            print("NUM PACKETS ------------")
+            print(num_packets)
+            # return packets, return_address
         else:
-            packets.append(data)     # Add the received packet to a list and repeat.
+            packets_received += 1
+            ack = packets_received % 2
+
+            data, checksum, seqnum = parse_packet(raw_data)
+
+            if ack != int(seqnum):
+                print("Error, ack is invalid")
+                # TODO uncomment and send response to sender when ack is incorrect
+                # result = "0"
+                # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+
+
+            else:
+                # Convert new checksum into a string
+                new_checksum = str(bytes(format(sum(data[:PACKET_SIZE]), '024b'), 'utf-8'))
+
+                # Swap the 1's and 0's of the new checksum
+                new_checksum = new_checksum.replace('0', 'x')
+                new_checksum = new_checksum.replace('1', '0')
+                new_checksum = new_checksum.replace('x', '1')
+
+                # Filter out the extra "b'" and "'" in the new string
+                new_checksum = new_checksum[2:len(new_checksum) - 1]
+
+                # Convert new_checksum back to bytes
+                new_checksum = bytes(new_checksum, 'utf-8')
+
+                # Sum checksum and new_checksum together, expected value is all 1's.
+                result = int(checksum) + int(new_checksum)
+                result = str(result)
+
+                print(checksum)
+                print(new_checksum)
+                print("RESULT: " + result)
+
+                if result != "111111111111111111111111":
+                    print("Error, checksums do not match")
+                    # TODO uncomment and send response back to sender for invalid checksum
+                    # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+
+                else:
+                    packets.append(data)     # Add the received packet to a list and repeat.
+                    # TODO uncomment and send response back to sender when everything is correct
+                    # sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                    if packets_received == num_packets:
+                        print("Finished receiving packets -------------------------")
+                        return packets, return_address
 
 
 def make_packet(data: bytes) -> list:
@@ -88,16 +153,16 @@ def make_packet(data: bytes) -> list:
             raw_packet = data                                       # Case where remaining data is less than a packet
             data = []                                               # set the data to an empty list to break from loop.
 
-        chksum = bytes(format(sum(raw_packet), '024b'), 'utf-8')    # Create a checksum for the packet.
+        checksum = bytes(format(sum(raw_packet), '024b'), 'utf-8')    # Create a checksum for the packet.
 
-        seqnum = bytes(str(seqnum + 1), 'utf-8')                 # Create an alternating sequence number. Note the
+        seqnum = bytes(str(seqnum ^ 1), 'utf-8')                 # Create an alternating sequence number. Note the
                                                                     # cast to bytes requires a string object.
         print("seq num: ")
         print(seqnum)
         print("sent: ")
-        print(chksum)
+        print(checksum)
 
-        packet = raw_packet + chksum + seqnum                      # Combine seqnum, chksum, & raw_packet into packet
+        packet = raw_packet + checksum + seqnum                      # Combine seqnum, checksum, & raw_packet into packet
         packets.append(packet)
 
         seqnum = int(seqnum)                    # Cast back to int so XOR operation can be done again.
