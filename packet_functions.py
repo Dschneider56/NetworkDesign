@@ -1,5 +1,6 @@
 from socket import *
 from time import sleep
+import random as rnd
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
 
@@ -7,7 +8,7 @@ SEQNUM_SIZE = 1         # Size of sequence number in bytes.
 CHECKSUM_SIZE = 24        # Size of checksum in bytes.
 PACKET_SIZE = 2048      # Size of a packet in bytes.
 INITIALIZE = b'\r\n'     # The terminator character sequence.
-TERMINATE = b'\r\n'
+ACK = b'\r\n'
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple):
@@ -22,20 +23,24 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     """
 
     # print("Sending initialization statement:")
-    print(len(packets))
+
     initializer = bytes(str(INITIALIZE) + str(len(packets)), 'utf-8')
     print("INITIALIZER ----------------------")
-    print(initializer)
     sock.sendto(initializer, addr_and_port)  # Every packet has been sent, signal the recipient to stop listening.
-    for i in range(0, (len(packets))):
+    sleep(0.01)
+    for i in range(len(packets)):
+        print("SEND_PACKETS: inside for loop ")
         ack = (i + 1) % 2
         received_ack = -1
-        sock.sendto(packets[i], addr_and_port)      # Send the packet.
-        sleep(0.005)                           # Small delay so receiver is not overloaded.
+        sock.sendto(corrupt_packet(packets[i], 0.8), addr_and_port)      # Send the packet.
 
         # Process ack and checksum from receiver
-        received_data, return_address = sock.recvfrom(25)  # Receive a ack
+        received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
+
+        print(f'SEND: received data: {received_data}')
+
         received_ack = int(received_data[:1])
+
         received_checksum = str(received_data[1:])
 
         if (received_ack == ack) and (received_checksum == "b'111111111111111111111111'"):
@@ -46,7 +51,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
         elif received_checksum != "b'111111111111111111111111'":
             i -= 1                            # If ack does not change, subtract 1 from i and resend that packet
             print("Invalid checksum received from packet " + str((i+1)) + ", resending data")
-
+    print('\n')
 
 def parse_packet(raw_data: bytes) -> tuple:
     """
@@ -76,28 +81,27 @@ def receive_packets(sock: socket) -> tuple:
     packets_received = 0
     num_packets = 0
     while True:
+        print("RECEIVE_PACKETS: waiting")
         raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
+        print(f"RECEIVED PACKET: {raw_data}")
 
         if raw_data[:7] == bytes(str(INITIALIZE), 'utf-8'):    # If the INITIALIZE character sequence is received, set up for loop.
             print("RECEIVED INITIALIZATION STATEMENT")
             # store the number of packets to be received
             num_packets = int(raw_data[7:])
-            print("NUM PACKETS ------------")
-            print(num_packets)
-            # return packets, return_address
+
         else:
             packets_received += 1
             ack = packets_received % 2
-
+            print(f'ACK = {ack}')
             data, checksum, seqnum = parse_packet(raw_data)
 
             if ack != int(seqnum):
-                print("Error, ack is invalid")
+                print(f"Error, ack ({ack}) is invalid")
                 # Send response to sender when ack is incorrect
-                result = "0"
-                sock.sendto(bytes(ack) + (bytes(result, 'utf-8')), return_address)
+                result = '0'
+                sock.sendto(bytes(str(ack), 'utf-8') + bytes(result, 'utf-8'), return_address)
                 packets_received -= 1
-
 
             else:
                 # Convert new checksum into a string
@@ -160,16 +164,32 @@ def make_packet(data: bytes) -> list:
 
         seqnum = bytes(str(seqnum ^ 1), 'utf-8')                 # Create an alternating sequence number. Note the
                                                                     # cast to bytes requires a string object.
-        print("seq num: ")
-        print(seqnum)
-        print("sent: ")
-        print(checksum)
 
         packet = raw_packet + checksum + seqnum                      # Combine seqnum, checksum, & raw_packet into packet
         packets.append(packet)
 
         seqnum = int(seqnum)                    # Cast back to int so XOR operation can be done again.
     return packets
+
+def corrupt_packet(pack: bytes, probability: float) -> bytes:
+    """
+    Will corrupt a packet with a certain probability less than 1.
+
+    :param pack:            The input packet
+    :param probability:     The likelihood that the packet will be corrupted
+    :return pack:           The packet that is possibly corrupted
+    """
+    assert(probability >= 0 and probability < 1)
+    probability *= 100      # Turn the percentage into an integer
+    rand_num = rnd.randint(0, 100)
+    if probability > rand_num:
+        print("packet corrupted!")
+        print(f"ORIGINAL PACKET:   {pack}")
+        pack = pack.replace(b'\x11', b'\x00')
+        print(f'CORRUPTED VERSION: {pack}')
+        return pack
+    else:
+        return pack
 
 # --------------------------------------- OLD FUNCTIONS BEFORE MODIFICATION ------------------------------------------ #
 # To restore these functions, simply remove the _old suffix and add it to the function above to change out.
