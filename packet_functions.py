@@ -32,9 +32,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     while i < len(packets):
         print("SEND_PACKETS: inside for loop " + str(i + 1))
         ack = (i + 1) % 2
-        received_ack = -1
-        packet = corrupt_packet(packets[i], 0.8)
-        sock.sendto(packet, addr_and_port)      # Send the packet.
+        sock.sendto(packets[i], addr_and_port)      # Send the packet.
 
         # Process ack and checksum from receiver
         received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
@@ -98,6 +96,9 @@ def receive_packets(sock: socket) -> tuple:
         else:
             packets_received += 1
             ack = packets_received % 2
+
+            # TODO uncomment the following to test ack errors: ack = corrupt_ack(ack, 0.4)
+
             print("ACK = " + str(ack))
             data, checksum, seqnum = parse_packet(raw_data)
 
@@ -130,6 +131,8 @@ def receive_packets(sock: socket) -> tuple:
                 print(checksum)
                 print(new_checksum)
                 print("RESULT: " + result)
+
+                # TODO uncomment the following to test checksum errors: result = corrupt_checksum(result, 0.2)
 
                 if result != "111111111111111111111111":
                     print("Error, checksums do not match for packet " + str(packets_received))
@@ -177,25 +180,43 @@ def make_packet(data: bytes) -> list:
     return packets
 
 
-def corrupt_packet(pack: bytes, probability: float) -> bytes:
+def corrupt_checksum(checksum: str, probability: float) -> str:
     """
     Will corrupt a packet with a certain probability less than 1.
 
-    :param pack:            The input packet
+    :param checksum:            The input packet
     :param probability:     The likelihood that the packet will be corrupted
-    :return pack:           The packet that is possibly corrupted
+    :return checksum:           The corrupted checksum
     """
     assert(0 <= probability < 1)
     probability *= 100      # Turn the percentage into an integer
     rand_num = rnd.randint(0, 100)
     if probability > rand_num:
         print("packet corrupted!")
-        print(f"ORIGINAL PACKET:   {pack}")
-        pack = pack.replace(b'\x11', b'\x00')
-        print(f'CORRUPTED VERSION: {pack}')
-        return pack
+        # return an invalid checksum
+        return "000000000000000000000000"
     else:
-        return pack
+        # return original checksum
+        return checksum
+
+
+def corrupt_ack(ack: int, probability: float) -> int:
+    """
+    Will corrupt a packet with a certain probability less than 1.
+
+    :param ack:            The input packet
+    :param probability:     The likelihood that the ack will be corrupted
+    :return ack:           The packet that is possibly corrupted
+    """
+    assert(0 <= probability < 1)
+    probability *= 100      # Turn the percentage into an integer
+    rand_num = rnd.randint(0, 100)
+    if probability > rand_num:
+        # return an invalid int for ack
+        return 2
+    else:
+        # do not change ack
+        return ack
 
 # --------------------------------------- OLD FUNCTIONS BEFORE MODIFICATION ------------------------------------------ #
 # To restore these functions, simply remove the _old suffix and add it to the function above to change out.
