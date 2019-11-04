@@ -26,9 +26,9 @@ class UDPServer:
 
             # Join the packets to a bytes object
             image = b''.join(packets)
-            self.create_grayscale_img(image)
+            self.save_image(image)
 
-            with open('sample-gray.bmp', "rb") as showImage:
+            with open('final-image.bmp', "rb") as showImage:
                 read_img = showImage.read()
 
                 # Create packets to send to the client
@@ -38,14 +38,13 @@ class UDPServer:
                 # Send new packets to the client
                 send_packets(self.server_socket, packets, client_address)
 
-    def create_grayscale_img(self, image: bytes):
-        # Convert the file to grayscale
-        gray_image = Image.open(io.BytesIO(image))
-        print('SERVER - Image received and can be opened; converting image to grayscale')
-        gray_image = gray_image.convert('L')
+    def save_image(self, image: bytes):
+        # Save the file to be retransmitted to sender
+        saved_image = Image.open(io.BytesIO(image))
+        print('SERVER - Image received and can be opened')
 
         # Save new file so we can read and create new packets to send back to the client
-        gray_image.save('sample-gray.bmp', 'bmp')
+        saved_image.save('final-image.bmp', 'bmp')
 
     def __del__(self):
         """
