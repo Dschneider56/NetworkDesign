@@ -43,8 +43,6 @@ class UDPClient:
     def open_image(self, file_name):
         with open(file_name, 'rb') as image:  # open the file to be transmitted
             self.message = image.read()
-            img = Image.open(io.BytesIO(self.message))
-            # img.show()    # TODO: uncomment this line after debugging
             return self.message
 
     def __del__(self):
