@@ -28,11 +28,13 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     print("INITIALIZER ----------------------")
     sock.sendto(initializer, addr_and_port)  # Every packet has been sent, signal the recipient to stop listening.
     sleep(0.01)
-    for i in range(len(packets)):
-        print("SEND_PACKETS: inside for loop ")
+    i = 0
+    while i < len(packets):
+        print("SEND_PACKETS: inside for loop " + str(i))
         ack = (i + 1) % 2
         received_ack = -1
-        sock.sendto(corrupt_packet(packets[i], 0.8), addr_and_port)      # Send the packet.
+        packet = corrupt_packet(packets[i], 0.8)
+        sock.sendto(packet, addr_and_port)      # Send the packet.
 
         # Process ack and checksum from receiver
         received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
@@ -45,12 +47,14 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
 
         if (received_ack == ack) and (received_checksum == "b'111111111111111111111111'"):
             print("ACK and Checksum received for packet " + str(i + 1))
+            i += 1
         elif received_ack != ack:
-            i -= 1  # If ack does not change, subtract 1 from i and resend that packet
             print("invalid ack from packet " + str((i + 1)) + ", resending data")
-        elif received_checksum != "b'111111111111111111111111'":
-            i -= 1                            # If checksum is incorrect, subtract 1 from i and resend that packet
-            print("Invalid checksum received from packet " + str((i+1)) + ", resending data")
+            # If ack does not change resend that packet
+
+        else:
+            print("Invalid checksum received from packet " + str((i + 1)) + ", resending data")
+            # If checksum is incorrect, subtract 1 from i and resend that packet
     print('\n')
 
 
