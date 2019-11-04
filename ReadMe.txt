@@ -27,7 +27,8 @@ UDPServer.py		- Contains class "UDPServer.py"; this class receives the packets s
 			Finally, it reads this grayscale image into a byte array, breaks it up into packets, and sends them back to the server.
 
 
-packet_functions.py	- Contains the functions "make_packet", "send_packets", and "receive_packets". Classes UDPClient and UDPServer call send_packet
+packet_functions.py	- Contains the functions "make_packet", "send_packets", "receive_packets", "parse_packets",
+"corrupt_checksum", and "corrupt_ack". Classes UDPClient and UDPServer call send_packet
 			and receive_packet to send and receive packets respectively. 
 
 			- "make_packet" splits up a byte array into packets 2 kb in size and returns them as a list of byte arrays.
@@ -35,10 +36,14 @@ packet_functions.py	- Contains the functions "make_packet", "send_packets", and 
 			- "send_packets" takes a list of byte arrays and sends them through a socket one at a time. When the last packet is sent, a
 			terminator character sequence is sent to signal that the complete message has been sent.
 
-			- "receive_packets" continuously receives the packets being sent until it receives a terminator sequence. It then returns a list
-			of byte arrays representing each packet.
+			- "receive_packets" continuously receives the packets being sent until it all expected packets are received.
+			 It then returns a list of byte arrays representing each packet.
 
-			- "short_sleep" is a very short delay thats called between sending packets in send_packets. This prevents data loss.
+			- "parse_packets" parses the sequence number, checksum, and data from the packet
+
+			- "corrupt_ack" has a random chance (odds determined by the user) to corrupt the received ack
+
+			- "corrupt_checksum" has a random chance (odds determined by the user) to corrupt the received checksum
 
 
 test.py			- This is the main executable; Run this script to initiate the Client -> Server -> Client communication process.
@@ -46,11 +51,23 @@ test.py			- This is the main executable; Run this script to initiate the Client 
 
 INSTRUCTIONS:
 
-	- Run the file "test.py". UDPClient will display the original image (island.bmp) and send it to UDPServer. Then, UDPServer will convert that image to grayscale,
-	show it, then send that grayscale image back to UDPClient. Finally, UDPClient will display the image it received from UDPServer, which is a 
-	grayscale version of the original image.
+	- To Test the file with no corruption:
+	Run the file "test.py". UDPClient will send the original image (island.bmp) to UDPServer. Then, UDPServer will save the image and
+	then send the image back to UDPClient. Finally, UDPClient will display the image it received from UDPServer,
+	this should be identical to the original image
 	
-	**NOTE: This program will create a new .bmp grayscale image.
+	**NOTE: This program will create a new .bmp image.
+
+    - To test the file with ack corruption:
+    Go to line 101 of pack_functions.py and uncomment it. Then change the second parameter of the method to the
+    percentage of error you would like to test for. This will give us a chance to change the ack to an invalid value
+    and force the sender to resend the data. After that, run test.pty.
+
+    - To test the file with data(checksum) corruption:
+    Go to line 136 of pack_functions.py and uncomment it. Then change the second parameter of the method to the
+    percentage of error you would like to test for. This will give us a chance to change the checksum to an invalid
+    value and force the sender to resend the data. After that, run test.pty.
+
 
 DEPENDENCIES:
 	Pillow - an image processing library in Python.

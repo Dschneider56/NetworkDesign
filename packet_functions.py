@@ -97,7 +97,8 @@ def receive_packets(sock: socket) -> tuple:
             packets_received += 1
             ack = packets_received % 2
 
-            # TODO uncomment the following to test ack errors: ack = corrupt_ack(ack, 0.4)
+            # TODO uncomment the following to test ack errors:
+            #  ack = corrupt_ack(ack, 0.4)
 
             print("ACK = " + str(ack))
             data, checksum, seqnum = parse_packet(raw_data)
@@ -130,9 +131,11 @@ def receive_packets(sock: socket) -> tuple:
 
                 print(checksum)
                 print(new_checksum)
-                print("RESULT: " + result)
 
-                # TODO uncomment the following to test checksum errors: result = corrupt_checksum(result, 0.2)
+                # TODO uncomment the following to test checksum errors:
+                #  result = corrupt_checksum(result, 0.4)
+
+                print("RESULT: " + result)
 
                 if result != "111111111111111111111111":
                     print("Error, checksums do not match for packet " + str(packets_received))
