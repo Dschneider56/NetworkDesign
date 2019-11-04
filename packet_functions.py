@@ -30,7 +30,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     sleep(0.01)
     i = 0
     while i < len(packets):
-        print("SEND_PACKETS: inside for loop " + str(i))
+        print("SEND_PACKETS: inside for loop " + str(i + 1))
         ack = (i + 1) % 2
         received_ack = -1
         packet = corrupt_packet(packets[i], 0.8)
