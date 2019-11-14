@@ -6,7 +6,7 @@ import datetime as dt
 
 
 class UDPClient:
-    def __init__(self, data_percent_corrupt=0, ack_percent_corrupt=0):
+    def __init__(self, data_percent_corrupt=0, ack_percent_corrupt=0, timeout=None):
         """
         Send an image to server, then request a modified image back from the server.
         """
@@ -17,6 +17,10 @@ class UDPClient:
         server_port = 12000             # server port number
         self.addr_and_port = (server_address, server_port)
         self.client_socket = socket(AF_INET, SOCK_DGRAM)
+
+
+        self.client_socket.settimeout(timeout)
+
         self.file_name = 'island.bmp'
         # Open and show the original image
 

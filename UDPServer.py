@@ -5,10 +5,11 @@ from threading import Thread
 
 
 class UDPServer:
-    def __init__(self):
+    def __init__(self, ack_percent_corrupt=0):
         """
         receives data from the client, and creates a new image file that is a grayscale copy of the original
         """
+        self.ack_percent_corrupt = ack_percent_corrupt
         self.server_port = 12000  # server port number
         self.server_socket = socket(AF_INET, SOCK_DGRAM)
         self.server_socket.bind(('', self.server_port))  # bind the socket to an address
@@ -21,7 +22,7 @@ class UDPServer:
     def listen(self):
         while True:
             # Receive packets from the client
-            packets, client_address = receive_packets(self.server_socket)
+            packets, client_address = receive_packets(self.server_socket, )
             logging.debug('SERVER - All packets have been received')
 
             # Join the packets to a bytes object

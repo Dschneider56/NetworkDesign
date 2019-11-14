@@ -2,6 +2,8 @@ from socket import *
 from time import sleep
 import random as rnd
 import logging
+from threading import Thread
+import datetime as dt
 
 # NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
 
@@ -10,7 +12,7 @@ To enable debugging statements, change the below level value to logging.DEBUG
 To disable them, change level to logging.CRITICAL
 """
 
-logging.basicConfig(level=logging.CRITICAL)  # For print statements, change CRITICAL to DEBUG. To disable them,
+logging.basicConfig(level=logging.DEBUG)  # For print statements, change CRITICAL to DEBUG. To disable them,
 # change DEBUG to CRITICAL.
 
 SEQNUM_SIZE = 1  # Size of sequence number in bytes.
@@ -18,6 +20,19 @@ CHECKSUM_SIZE = 24  # Size of checksum in bytes.
 PACKET_SIZE = 2048  # Size of a packet in bytes.
 INITIALIZE = b'\r\n'  # The terminator character sequence.
 ACK = b'\r\n'
+
+class Timer:
+    def __init__(self, period, on_timeout, on_receive):
+        self.period = period
+        self.on_timeout = on_timeout
+        timer_thread = Thread(target=self.time_elapsed)
+
+    def time_elapsed(self):
+        start_time = dt.datetime.now()
+        end_time = start_time + self.period
+        while dt.datetime.now() < end_time:
+            sleep(0.001)
+        self.on_timeout(True)
 
 
 def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent_corrupt=0.0):
@@ -39,14 +54,20 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
     sleep(0.01)
     i = 0
     while i < len(packets):
+        #time.sleep()
         logging.debug("SEND_PACKETS: inside for loop " + str(i))
         ack = (i + 1) % 2
         received_ack = -1
         packet = corrupt_packet(packets[i], data_percent_corrupt)
+        ack = corrupt_ack(ack)
         sock.sendto(packet, addr_and_port)  # Send the packet.
 
         # Process ack and checksum from receiver
-        received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
+        try:
+            received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
+        except:
+            logging.debug("timed out!")
+            continue
 
         logging.debug(f'SEND: received data: {received_data}')
 
@@ -107,11 +128,8 @@ def receive_packets(sock: socket, ack_corrupt_percentage=0) -> tuple:
         else:
             packets_received += 1
             ack = corrupt_ack(packets_received % 2, ack_corrupt_percentage)
-            logging.debug("ACK = " + str(ack))
-            ack = packets_received % 2
-
-            # TODO uncomment the following to test ack errors:
-            #  ack = corrupt_ack(ack, 0.4)
+            logging.debug("RECEIVE: ACK = " + str(ack))
+            #ack = packets_received % 2
 
             data, checksum, seqnum = parse_packet(raw_data)
 
@@ -146,12 +164,12 @@ def receive_packets(sock: socket, ack_corrupt_percentage=0) -> tuple:
                 logging.debug("RESULT: " + result)
 
                 # TODO uncomment the following to test checksum errors:
-                #  result = corrupt_checksum(result, 0.4)
+                result = corrupt_checksum(result, 0.4)
 
                 if result != "111111111111111111111111":
                     logging.debug("Error, checksums do not match for packet " + str(packets_received))
                     # Send response back to sender for invalid checksum
-                    sock.sendto(bytes(str(ack), '-utf-8') + (bytes(result, 'utf-8')), return_address)
+                    #sock.sendto(bytes(str(ack), '-utf-8') + (bytes(result, 'utf-8')), return_address)
                     packets_received -= 1
 
                 else:
@@ -213,15 +231,12 @@ def corrupt_packet(pack: bytes, probability: float) -> bytes:
     else:
         return pack
 
-
-def corrupt_ack(ackbit: bytes, probability: float):
+def corrupt_ack(ackbit: bytes, probability: float) -> bytes:
     assert (0 <= probability < 1)
     probability *= 100  # Turn the percentage into an integer
     rand_num2 = rnd.randint(0, 100)
     if probability > rand_num2:
-        if ackbit == 1:
-            return 0
-        elif ackbit == 0:
-            return 1
+        logging.debug("ack corrupt!")
+        return 2
     else:
         return ackbit
