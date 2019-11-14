@@ -13,7 +13,7 @@ class UDPServer:
         self.server_socket = socket(AF_INET, SOCK_DGRAM)
         self.server_socket.bind(('', self.server_port))  # bind the socket to an address
 
-        print("SERVER - Server ready to receive.")
+        logging.debug("SERVER - Server ready to receive.")
 
         self.listen_for_data = Thread(target=self.listen)     # Listen for data indefinitely on separate thread.
         self.listen_for_data.start()
@@ -22,26 +22,19 @@ class UDPServer:
         while True:
             # Receive packets from the client
             packets, client_address = receive_packets(self.server_socket)
-            print('SERVER - All packets have been received')
+            logging.debug('SERVER - All packets have been received')
 
             # Join the packets to a bytes object
             image = b''.join(packets)
             self.save_image(image)
-
-            with open('final-image.bmp', "rb") as showImage:
-                read_img = showImage.read()
-
-                # Create packets to send to the client
-                print("SERVER - Creating packets")
-                packets = make_packet(read_img)
-
-                # Send new packets to the client
-                send_packets(self.server_socket, packets, client_address)
+            # Open the image to confirm the server could modify the original
+            show_image = Image.open(io.BytesIO(image))
+            show_image.show()
 
     def save_image(self, image: bytes):
         # Save the file to be retransmitted to sender
         saved_image = Image.open(io.BytesIO(image))
-        print('SERVER - Image received and can be opened')
+        logging.debug('SERVER - Image received and can be opened')
 
         # Save new file so we can read and create new packets to send back to the client
         saved_image.save('final-image.bmp', 'bmp')
