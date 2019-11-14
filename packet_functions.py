@@ -105,8 +105,17 @@ def receive_packets(sock: socket, ack_corrupt_percentage=0) -> tuple:
 
         else:
             packets_received += 1
+<<<<<<< HEAD
             ack = corrupt_ack(packets_received % 2, ack_corrupt_percentage)
             logging.debug("ACK = " + str(ack))
+=======
+            ack = packets_received % 2
+
+            # TODO uncomment the following to test ack errors:
+            #  ack = corrupt_ack(ack, 0.4)
+
+            print("ACK = " + str(ack))
+>>>>>>> 01eac927a8ae613a7cd8d687863f1ce1abe2dadc
             data, checksum, seqnum = parse_packet(raw_data)
 
             if ack != int(seqnum):
@@ -135,9 +144,19 @@ def receive_packets(sock: socket, ack_corrupt_percentage=0) -> tuple:
                 result = int(checksum) + int(new_checksum)
                 result = str(result)
 
+<<<<<<< HEAD
                 logging.debug(checksum)
                 logging.debug(new_checksum)
                 logging.debug("RESULT: " + result)
+=======
+                print(checksum)
+                print(new_checksum)
+
+                # TODO uncomment the following to test checksum errors:
+                #  result = corrupt_checksum(result, 0.4)
+
+                print("RESULT: " + result)
+>>>>>>> 01eac927a8ae613a7cd8d687863f1ce1abe2dadc
 
                 if result != "111111111111111111111111":
                     logging.debug("Error, checksums do not match for packet " + str(packets_received))
