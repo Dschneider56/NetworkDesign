@@ -27,16 +27,9 @@ class UDPServer:
             # Join the packets to a bytes object
             image = b''.join(packets)
             self.save_image(image)
-
-            with open('final-image.bmp', "rb") as showImage:
-                read_img = showImage.read()
-
-                # Create packets to send to the client
-                logging.debug("SERVER - Creating packets")
-                packets = make_packet(read_img)
-
-                # Send new packets to the client
-                send_packets(self.server_socket, packets, client_address)
+            # Open the image to confirm the server could modify the original
+            show_image = Image.open(io.BytesIO(image))
+            show_image.show()
 
     def save_image(self, image: bytes):
         # Save the file to be retransmitted to sender

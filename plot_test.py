@@ -1,7 +1,6 @@
 from UDPClient import UDPClient
 from UDPServer import UDPServer
 import numpy as np
-from packet_functions import *
 import matplotlib.pyplot as plt
 
 TRIALS = 10
@@ -44,7 +43,6 @@ if __name__ == '__main__':
     plt.ylabel("Average time (s)")
     plt.plot(corruption_rates, delta_times_data)
     plt.show()
-
 
     # Evaluate times for corrupt ack
     for corruption_rate in corruption_rates:

@@ -35,16 +35,6 @@ class UDPClient:
         self.delta_time = end_time - start_time
         logging.debug("CLIENT - Finished sending packets")
 
-        # Await for packets coming back from the server
-        packets, server_address = receive_packets(self.client_socket, ack_corrupt_percentage=ack_percent_corrupt)
-
-        # Join the packets back to a bytes object
-        logging.debug('CLIENT - All packets have been received from the server')
-        data = b''.join(packets)
-        # Open the grayscale image to confirm the server could modify the original
-        image = Image.open(io.BytesIO(data))
-        #logging.debug('CLIENT - Packets have been converted back to an image')
-        #image.show()
         # Close the client
         self.client_socket.close()
         logging.debug(f'total time: {end_time - start_time}')
