@@ -15,20 +15,20 @@ ENVIRONMENT:
 
 FILES:
 
-UDPClient.py 		- Contains class "UDPClient.py"; this class opens an image file (island.bp by default) and displays it. 
-			It then reads it as a binary and breaks it up into packets. These packets are sent to the 
-			server one at a time, and sends a terminating character sequence once all the packets have been sent. Finally, 
-			it receives whatever packets the server sends back, reassembles the packets into a byte array, and displays
+Sender.py 		- Contains class "Sender.py"; this class opens an image file (island.bp by default) and displays it.
+			It then reads it as a binary and breaks it up into packets. An initializer statement is sent to the receiver
+			which contains the number of packets the receiver should expect. These packets are sent to the receiver one
+			at a time. Finally, it receives whatever packets the receiver sends back, reassembles the packets into a byte array, and displays
 		 	this byte array as an image.
 
 
-UDPServer.py		- Contains class "UDPServer.py"; this class receives the packets sent to it by the client until it receives a terminator sequence,
+Receiver.py		- Contains class "UDPreceiver.py"; this class receives the packets sent to it by the sender until it receives a terminator sequence,
 			then reassembles them into a byte array, converts this byte array into a grayscale image, and shows it. 
-			Finally, it reads this grayscale image into a byte array, breaks it up into packets, and sends them back to the server.
+			Finally, it reads this grayscale image into a byte array, breaks it up into packets, and sends them back to the receiver.
 
 
 packet_functions.py	- Contains the functions "make_packet", "send_packets", "receive_packets", "parse_packets",
-"corrupt_checksum", and "corrupt_ack". Classes UDPClient and UDPServer call send_packet
+"corrupt_checksum", and "corrupt_ack". Classes Sender and Receiver call send_packet
 			and receive_packet to send and receive packets respectively. 
 
 			- "make_packet" splits up a byte array into packets 2 kb in size and returns them as a list of byte arrays.
@@ -46,14 +46,14 @@ packet_functions.py	- Contains the functions "make_packet", "send_packets", "rec
 			- "corrupt_checksum" has a random chance (odds determined by the user) to corrupt the received checksum
 
 
-test.py			- This is the main executable; Run this script to initiate the Client -> Server -> Client communication process.
+test.py			- This is the main executable; Run this script to initiate the sender -> receiver -> sender communication process.
 
 
 INSTRUCTIONS:
 
 	- To Test the file with no corruption:
-	Run the file "test.py". UDPClient will send the original image (island.bmp) to UDPServer. Then, UDPServer will save the image and
-	then send the image back to UDPClient. Finally, UDPClient will display the image it received from UDPServer,
+	Run the file "test.py". Sender will send the original image (island.bmp) to Receiver. Then, Receiver will save the image and
+	then send the image back to Sender. Finally, Sender will display the image it received from Receiver,
 	this should be identical to the original image
 	
 	**NOTE: This program will create a new .bmp image.

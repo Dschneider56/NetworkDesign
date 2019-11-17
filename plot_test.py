@@ -1,5 +1,5 @@
-from UDPClient import UDPClient
-from UDPServer import UDPServer
+from Sender import Sender
+from Receiver import Receiver
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,12 +11,12 @@ if __name__ == '__main__':
     delta_times = []
     delta_times_data = []
     delta_times_ack = []
-    UDPServer()  # Create server thread
+    Receiver()  # Create receiver thread
 
     # Evaluate times for regular data
     for trial in range(TRIALS):
         #time = []
-        c = UDPClient()  # Create client object
+        c = Sender()  # Create sender object
         #times.append(c.delta_time)
         #print(c.delta_time)
         delta_times.append(c.delta_time)
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     for corruption_rate in corruption_rates:
         times = []
         for i in range(TRIALS):
-            c = UDPClient(data_percent_corrupt=corruption_rate)  # Create client object
+            c = Sender(data_percent_loss=corruption_rate)  # Create sender object
             times.append(c.delta_time)
         delta_times_data.append(np.mean(times))
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     for corruption_rate in corruption_rates:
         times = []
         for i in range(TRIALS):
-            c = UDPClient(ack_percent_corrupt=corruption_rate)  # Create client object
+            c = Sender(ack_percent_loss=corruption_rate)  # Create sender object
 
             times.append(c.delta_time)
         delta_times_ack.append(np.mean(times))
