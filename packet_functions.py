@@ -19,6 +19,7 @@ SEQNUM_SIZE = 1  # Size of sequence number in bytes.
 CHECKSUM_SIZE = 24  # Size of checksum in bytes.
 PACKET_SIZE = 2048  # Size of a packet in bytes.
 INITIALIZE = b'\r\n'  # The terminator character sequence.
+TERMINATE = b'\n\r'  # The terminator character sequence.
 
 # class Timer:
 #     def __init__(self, period, on_timeout, on_receive):
@@ -72,6 +73,8 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
     :param sock:            The socket object through which the packets will be sent
     :param packets:         The collection of packets.
     :param addr_and_port:   A tuple containing the destination address and destination port number
+    :param data_percent_loss:    The probability that we should lose the data the sender gets from the receiver
+    :param ack_percent_loss:    The probability that we should corrupt the ack the sender gets from the receiver
 
     :return:                None
     """
@@ -104,6 +107,9 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
         # Process ack and checksum from receiver
         try:
             received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + SEQNUM_SIZE)  # Receive a ack
+            if received_data == TERMINATE:
+                i = len(packets)
+                continue
             received_ack = int(received_data[:1])
             received_checksum = str(received_data[1:])
         except Exception as e:
@@ -126,7 +132,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
         else:
             logging.debug("Invalid checksum received from packet " + str((i + 1)) + ", resending data")
             # If checksum is incorrect, subtract 1 from i and resend that packet
-    logging.debug('\n')
+    logging.debug('COMPLETE\n')
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -228,6 +234,7 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
                 previous_acknowledgement = bytes(str(ack), 'utf-8') + (bytes(result, 'utf-8'))
                 if packets_received == num_packets:
                     logging.debug("Finished receiving packets -------------------------")
+                    sock.sendto(TERMINATE, return_address)
                     return packets, return_address
 
 
