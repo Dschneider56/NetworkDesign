@@ -19,7 +19,6 @@ SEQNUM_SIZE = 1  # Size of sequence number in bytes.
 CHECKSUM_SIZE = 24  # Size of checksum in bytes.
 PACKET_SIZE = 2048  # Size of a packet in bytes.
 INITIALIZE = b'\r\n'  # The terminator character sequence.
-ACK = b'\r\n'
 
 # class Timer:
 #     def __init__(self, period, on_timeout, on_receive):
@@ -96,7 +95,7 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
     # i is the index of our packets list which we will use to send packets in the proper order.
     i = 0
     while i < len(packets):
-        logging.debug("SEND_PACKETS: inside for loop " + str(i))
+        logging.debug("SEND_PACKETS: inside for loop for packet " + str(i + 1))
         ack = i % 2
         received_ack = -1
         received_checksum = -1
@@ -160,6 +159,7 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
     packets = []
     packets_received = 0
     num_packets = 0
+    previous_acknowledgement = None
     while True:
         logging.debug("RECEIVE_PACKETS: waiting")
         raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
@@ -185,6 +185,7 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
         if ack != int(seqnum):
             logging.debug("Receiver: Error, ack " + str(ack) + " is invalid for packet " + str(packets_received))
             # Decrement packets_receiver and then do nothing (wait for a timeout)
+            sock.sendto(previous_acknowledgement, return_address)
             packets_received -= 1
 
         else:
@@ -224,6 +225,7 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
                 # Send response back to sender when everything is correct
                 logging.debug("Packet received successfully, sending response to sender")
                 sock.sendto(bytes(str(ack), 'utf-8') + (bytes(result, 'utf-8')), return_address)
+                previous_acknowledgement = bytes(str(ack), 'utf-8') + (bytes(result, 'utf-8'))
                 if packets_received == num_packets:
                     logging.debug("Finished receiving packets -------------------------")
                     return packets, return_address
