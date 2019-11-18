@@ -15,16 +15,25 @@ ENVIRONMENT:
 
 FILES:
 
-Sender.py 		- Contains class "Sender.py"; this class opens an image file (island.bp by default) and displays it.
+Sender.py 		- Contains class "Sender.py"; this class opens an image file (island.bmp by default).
 			It then reads it as a binary and breaks it up into packets. An initializer statement is sent to the receiver
 			which contains the number of packets the receiver should expect. These packets are sent to the receiver one
-			at a time. Finally, it receives whatever packets the receiver sends back, reassembles the packets into a byte array, and displays
-		 	this byte array as an image.
+			at a time. Between each packet it waits for the receiver to send an acknowledgement confirming the packet
+			was received properly. The sender then continues sending packets until all are sent. Lastly it sends a
+			terminate statement to the receiver so both the sender and receiver know to stop listening.
+
+			The sender has optional parameters in the constructor so the user may test data/ack loss. By inputting a
+			probability between 0 and 1 the user can chose what percentage of data to drop and observe how it affects
+			performance time. Default is no corruption.
 
 
-Receiver.py		- Contains class "UDPreceiver.py"; this class receives the packets sent to it by the sender until it receives a terminator sequence,
-			then reassembles them into a byte array, converts this byte array into a grayscale image, and shows it. 
-			Finally, it reads this grayscale image into a byte array, breaks it up into packets, and sends them back to the receiver.
+Receiver.py		- Contains class "Receiver.py"; this class receives the packets sent to it by the sender until it
+            receives a terminator sequence, then reassembles them into a byte array, converts this byte array into an
+            image, and shows it. Finally, it displays the image it received.
+
+            The receiver has optional parameters in the constructor so the user may test data/ack corruption. By
+            inputting a probability between 0 and 1 the user can chose what percentage of data to corrupt and observe
+            how it affects performance time. Default is no corruption.
 
 
 packet_functions.py	- Contains the functions "make_packet", "send_packets", "receive_packets", "parse_packets",
@@ -59,14 +68,16 @@ INSTRUCTIONS:
 	**NOTE: This program will create a new .bmp image.
 
     - To test the file with ack corruption:
-    Go to line 101 of pack_functions.py and uncomment it. Then change the second parameter of the method to the
-    percentage of error you would like to test for. This will give us a chance to change the ack to an invalid value
-    and force the sender to resend the data. After that, run test.pty.
+    In the receiver constructor add the parameter ack_percent_corrupt and set it equal to a probability between 0 and 1
 
     - To test the file with data(checksum) corruption:
-    Go to line 136 of pack_functions.py and uncomment it. Then change the second parameter of the method to the
-    percentage of error you would like to test for. This will give us a chance to change the checksum to an invalid
-    value and force the sender to resend the data. After that, run test.pty.
+    In the receiver constructor add the parameter data_percent_corrupt and set it equal to a probability between 0 and 1
+
+    - To test the file with ack loss:
+    In the sender constructor add the parameter ack_percent_loss and set it equal to a probability between 0 and 1
+
+    - To test the file with data(checksum) loss:
+    In the receiver constructor add the parameter data_percent_loss and set it equal to a probability between 0 and 1
 
 
 DEPENDENCIES:
