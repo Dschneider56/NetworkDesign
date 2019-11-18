@@ -165,7 +165,7 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
     packets = []
     packets_received = 0
     num_packets = 0
-    previous_acknowledgement = None
+    previous_acknowledgement = bytes(str(0), 'utf-8') + (bytes("000000000000000000000000", 'utf-8'))
     while True:
         logging.debug("RECEIVE_PACKETS: waiting")
         raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
