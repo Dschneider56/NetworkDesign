@@ -19,7 +19,8 @@ class Sender:
         self.ack_percent_loss = ack_percent_loss
 
         # Open the original image
-        self.open_image(self.file_name)
+        with open(file_name, 'rb') as image:  # open the file to be transmitted
+            self.message = image.read()
 
         # Convert the image to packets
         logging.debug("sender - Creating packets")
@@ -39,11 +40,6 @@ class Sender:
         # Close the sender
         self.sender_socket.close()
         logging.debug(f'total time: {end_time - start_time}')
-
-    def open_image(self, file_name):
-        with open(file_name, 'rb') as image:  # open the file to be transmitted
-            self.message = image.read()
-            return self.message
 
     def __del__(self):
         """
