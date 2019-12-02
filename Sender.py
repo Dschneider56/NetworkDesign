@@ -14,7 +14,7 @@ class Sender:
         self.addr_and_port = (receiver_address, receiver_port)
         self.sender_socket = socket(AF_INET, SOCK_DGRAM)
         self.file_name = file_name
-        self.sender_socket.settimeout(timer_timeout)
+        self.timeout = timer_timeout
         self.data_percent_loss = data_percent_loss
         self.ack_percent_loss = ack_percent_loss
 
@@ -32,7 +32,7 @@ class Sender:
         # Record the time it takes to send the packets
         start_time = dt.datetime.now().timestamp()
         send_packets(self.sender_socket, self.packets, self.addr_and_port, data_percent_loss=self.data_percent_loss,
-                     ack_percent_loss=self.ack_percent_loss)
+                     ack_percent_loss=self.ack_percent_loss, timer_timeout=self.timeout)
         end_time = dt.datetime.now().timestamp()
         self.delta_time = end_time - start_time
         logging.debug("sender - Finished sending packets")

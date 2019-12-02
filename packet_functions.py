@@ -1,9 +1,10 @@
 import math
+import time
+from multiprocessing import Process, Queue, Value
 from socket import *
 import random as rnd
 import logging
-
-# NOTE: These variables can be changed by simply altering them here. You don't need to change code anywhere else.
+from time import sleep
 
 """
 To enable debugging statements, change the below level value to logging.DEBUG
@@ -18,19 +19,6 @@ PACKET_SIZE = 2048  # Size of a packet in bytes.
 INITIALIZE = b'\r\n'  # The terminator character sequence.
 TERMINATE = b'\n\r'  # The terminator character sequence.
 
-# class Timer:
-#     def __init__(self, period, on_timeout, on_receive):
-#         self.period = period
-#         self.on_timeout = on_timeout
-#         timer_thread = Thread(target=self.time_elapsed)
-#
-#     def time_elapsed(self):
-#         start_time = dt.datetime.now()
-#         end_time = start_time + self.period
-#         while dt.datetime.now() < end_time:
-#             sleep(0.001)
-#         self.on_timeout(True)
-
 
 def make_packet(data: bytes) -> list:
     """
@@ -44,6 +32,7 @@ def make_packet(data: bytes) -> list:
     packets: list = []
     num_packets = math.ceil(len(data) / 2048) + 1
     seqnum = int(0)
+    
     while seqnum <= num_packets:
         if len(data) > PACKET_SIZE:  # Keep appending the packets to the packet list.
             raw_packet = data[:PACKET_SIZE]  # Extract the first "PACKET_SIZE" bytes into packet.
@@ -67,10 +56,29 @@ def make_packet(data: bytes) -> list:
         seqnum = int(seqnum)  # Cast back to int so it can be incremented again
 
 
-def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent_loss=0, ack_percent_loss=0):
+def run_timer(timer_timeout, timeout_state):
+    timeout_state.value = 0
+    start_time = time.time()
+    end_time = start_time + timer_timeout
+    while time.time() < end_time:
+        if timeout_state.value == 1:
+            logging.debug("RECEIVED INSTRUCTION TO TERMINATE")
+            timeout_state.value = 0
+            return
+        sleep(0.0001)
+
+    # If timed out, return True
+    timeout_state.value = 1
+    logging.debug("TIMED OUT")
+    return
+
+
+def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent_loss=0, ack_percent_loss=0,
+                 timer_timeout=0.05):
     """
     Send a collection of packets to a destination address through a socket.
 
+    :param timer_timeout:   The amount of time to wait for a response from the receiver before resending data
     :param sock:            The socket object through which the packets will be sent
     :param packets:         The collection of packets.
     :param addr_and_port:   A tuple containing the destination address and destination port number
@@ -80,48 +88,61 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
     :return:                None
     """
 
-    logging.debug("Sending initialization statement:")
+    logging.debug("Appending initialization statement:")
 
-    # Create an initialize statement and append the number of packets the receiver should expect
-    # len(packets) is the number of packets of data we send, and we add 1 for the initializer
+    # Create an initialize statement and append the number of packets the receiver should expect at the end
     initializer = bytes(str(INITIALIZE), 'utf-8')
-    logging.debug("INITIALIZER ----------------------")
 
     checksum = bytes(format(sum(initializer), '024b'), 'utf-8')  # Create a checksum for the initializer.
 
     # Initializer will send over the number of packets at the end, as opposed to a sequence number
+    # len(packets) is the number of packets of data we send, and we add 1 to include the initializer
     num_packets = bytes(str(len(packets) + 1), 'utf-8')
 
     # Combine seqnum, checksum, & initializer into a packet
     initializer_packet = initializer + checksum + num_packets
-    seq_num_size = len(bytes(str(len(packets) + 1), 'utf-8'))       # Seq_num_size determined by the number of packets
-    # Including the initializer
+    seq_num_size = len(num_packets)       # Seq_num_size determined by the number of packets
 
     packets.insert(0, initializer_packet)  # Append the initializer to the start of our list of packets
 
-    # Done creating and appending initializer
-
     # i is the index of our packets list which we will use to send packets in the proper order.
     i = 0
+    timeout_state = Value('i', 0)
+    data_size = CHECKSUM_SIZE + seq_num_size
+
     while i < len(packets):     # While we still have packets to send, send over a packet one at a time
-        logging.debug("SEND_PACKETS: inside for loop for packet " + str(i + 1))
+        logging.debug("SEND_PACKETS: inside for loop for packet " + str(i))
         ack = i
         received_ack = -1
         received_checksum = -1
-        sock.sendto(packets[i], addr_and_port)  # Send the packet.
 
-        # Process ack and checksum from receiver
-        try:
-            # Receive an ack
-            received_data, return_address = sock.recvfrom(CHECKSUM_SIZE + seq_num_size)
-            if received_data == TERMINATE:
-                i = len(packets)
-                continue
-            received_ack = int(received_data[:seq_num_size])
-            received_checksum = str(received_data[seq_num_size:])
-        except Exception as e:
-            logging.debug(e)
+        # Define the processes for the timer and for sending the data and awaiting for a response from the receiver
+        timer = Process(target=run_timer, args=(timer_timeout, timeout_state))
+        data_queue = Queue()
+        await_response = Process(target=send_packet_with_timeout, args=(sock, packets[i], addr_and_port, data_size,
+                                                                        data_queue, timeout_state))
+
+        # Start a timer and then send data and listen for a response from the receiver
+        timer.start()
+        await_response.start()
+        timer.join()
+
+        if timeout_state == 1 and await_response.is_alive():
+            logging.debug("TERMINATING AWAITING THREAD")
+            await_response.terminate()
+
+        if data_queue.empty():
+            logging.debug("Did not receive a response, resending packet")
             continue
+
+        received_data = data_queue.get_nowait()
+
+        if received_data == TERMINATE:
+            i = len(packets)
+            continue
+
+        received_ack = int(received_data[:seq_num_size])
+        received_checksum = str(received_data[seq_num_size:])
 
         logging.debug(f'SENDER: received data: {received_data}')
 
@@ -140,6 +161,27 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple, data_percent
             logging.debug("SENDER: Invalid checksum received from packet " + str((i + 1)) + ", resending data")
             # If checksum is incorrect, subtract 1 from i and resend that packet
     logging.debug('COMPLETE\n')
+
+
+def send_packet_with_timeout(sock: socket, packet, addr_and_port: tuple, data_size, data_queue, timeout_state):
+    """
+        Send an individual packet and run a timer on seperate threads
+        When timer finishes set a flag to indicate a timeout and cancel the thread to receive response from receiver
+        If we get a response from the receiver, stop the timer thread.
+
+        :param sock:            The socket object through which the packets will be sent
+        :param packet:         The packet we are sending over.
+        :param addr_and_port:   A tuple containing the destination address and destination port number
+        :param data_size:       Size of data to listen for from receiver
+        :param data_queue:   Location where the response from the receiver will be stored
+        :param timeout_state:   When data is received modify this variable so the timer process will terminate
+
+        :return:                None
+        """
+    sock.sendto(packet, addr_and_port)  # Send the packet.
+    received_data = sock.recv(data_size)    # Listen for response from receiver
+    data_queue.put(received_data)
+    timeout_state.value = 1  # Manually set timeout to 1 so the timer will exit
 
 
 def parse_packet(raw_data: bytes, seq_num_size) -> tuple:
@@ -195,7 +237,6 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
 
         seq_num_size = len(bytes(str(num_packets), 'utf-8'))
         ack = packets_received
-        packets_received += 1
 
         logging.debug("RECEIVER: ACK = " + str(ack))
 
@@ -210,10 +251,10 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
         data, checksum, seqnum = parse_packet(raw_data, seq_num_size)
 
         if int(ack) != int(seqnum):
-            logging.debug("Receiver: Error, ack " + str(ack) + " is invalid for packet " + str(packets_received))
-            # Decrement packets_receiver and then do nothing (wait for a timeout)
+            logging.debug("Receiver: Error, ack " + str(ack) + " does not match seq num: " + str(seqnum) +
+                          " for packet " + str(packets_received))
+            # Resend previous acknowledgement in case the sender did not properly receive it
             sock.sendto(previous_acknowledgement, return_address)
-            packets_received -= 1
 
         else:
             # Convert new checksum into a string
@@ -236,25 +277,26 @@ def receive_packets(sock: socket, data_percent_corrupt=0, ack_percent_corrupt=0)
 
             logging.debug(checksum)
             logging.debug(new_checksum)
-            logging.debug("RESULT: " + result)
+            logging.debug("RECEIVER RESULT: " + result)
 
             # This line is used to test packet bit errors. This corrupts the checksum so the receiver will wait for a
             # timeout. The default percentage of corruption is 0, so this is essentially a no-op unless told to corrupt
             result = corrupt_checksum(result, data_percent_corrupt)
 
             if result != "111111111111111111111111":
-                logging.debug("Error, checksums do not match for packet " + str(packets_received))
-                # Decrement packets_receiver and then do nothing (wait for a timeout)
-                packets_received -= 1
+                logging.debug("RECEIVER Error, checksums do not match for packet " + str(packets_received))
+                # Resend previous acknowledgement in case of error
+                sock.sendto(previous_acknowledgement, return_address)
 
             else:
-                packets.append(data)  # Add the received packet to a list and repeat.
                 # Send response back to sender when everything is correct
-                logging.debug("Packet received successfully, sending response to sender")
+                logging.debug("RECEIVER Packet received successfully, sending response to sender")
                 sock.sendto(ack + (bytes(result, 'utf-8')), return_address)
                 previous_acknowledgement = ack + (bytes(result, 'utf-8'))
+                packets.append(data)  # Add the received packet to a list and repeat.
+                packets_received += 1
                 if packets_received == num_packets:
-                    logging.debug("Finished receiving packets -------------------------")
+                    logging.debug("RECEIVER Finished receiving packets -------------------------")
                     sock.sendto(TERMINATE, return_address)
                     return packets, return_address
 
