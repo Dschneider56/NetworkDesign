@@ -25,14 +25,17 @@ class Receiver:
         packets, sender_address = receive_packets(self.receiver_socket,
                                                   data_percent_corrupt=self.data_percent_corrupt,
                                                   ack_percent_corrupt=self.ack_percent_corrupt)
+        self.receiver_socket.close()
         logging.debug('receiver - All packets have been received')
 
         # Join the packets to a bytes object
-        image = b''.join(packets[1:])
+        image = b''.join(packets[0:])
         self.save_image(image)
         # Open the image to confirm the receiver could modify the original
         show_image = Image.open(io.BytesIO(image))
         show_image.show()
+
+
 
     def save_image(self, image: bytes):
         # Save the file to be retransmitted to sender

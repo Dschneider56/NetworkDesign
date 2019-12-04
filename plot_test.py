@@ -126,7 +126,7 @@ def eval_ack_loss():
 if __name__ == '__main__':
 
     #eval_reg_data()
-   # eval_data_corrupt()
+    eval_data_corrupt()
     eval_ack_corrupt()
     eval_data_loss()
     eval_ack_loss()

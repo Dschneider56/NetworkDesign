@@ -39,7 +39,7 @@ class Sender:
 
         # Close the sender
         self.sender_socket.close()
-        logging.debug(f'total time: {end_time - start_time}')
+        print(f'total time: {end_time - start_time}')
 
     def __del__(self):
         """
