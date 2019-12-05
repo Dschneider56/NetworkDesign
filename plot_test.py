@@ -3,7 +3,7 @@ from Receiver import Receiver
 import numpy as np
 import matplotlib.pyplot as plt
 
-TRIALS = 3
+TRIALS = 1
 TO_PERCENT = 0.65
 
 dest = r'C:\\Users\\Roarke\\Desktop\\graphs\\'
@@ -13,6 +13,7 @@ corruption_rates = np.arange(0.0, TO_PERCENT, 0.05)
 #delta_times_data = []
 #delta_times_ack = []
 
+
 def eval_reg_data():
     delta_times = []
     for trial in range(20):
@@ -20,7 +21,7 @@ def eval_reg_data():
         r = Receiver()
         c = Sender()  # Create sender object
         # times.append(c.delta_time)
-        # print(c.delta_time)
+        #         # print(c.delta_time)
         delta_times.append(c.delta_time)
 
     plt.grid(color='black', linestyle=':', linewidth=1)
@@ -32,7 +33,7 @@ def eval_reg_data():
     plt.savefig(dest + 'no_corruption.png')
     plt.close()
     delta_times = []
-    #plt.show()
+
 
 def eval_data_corrupt():
     delta_times_data = []
@@ -53,7 +54,7 @@ def eval_data_corrupt():
     plt.savefig(dest + 'data_corruption.png')
     plt.close()
     delta_times_data = []
-    #plt.show()
+
 
 def eval_ack_corrupt():
     delta_times_ack = []
@@ -61,7 +62,7 @@ def eval_ack_corrupt():
     for corruption_rate in corruption_rates:
         times = []
         for i in range(TRIALS):
-            r = Receiver(ack_percent_corrupt=corruption_rate)
+            r = Receiver(seqnum_percent_corrupt=corruption_rate)
             c = Sender()  # Create sender object
 
             times.append(c.delta_time)
@@ -76,7 +77,7 @@ def eval_ack_corrupt():
     plt.savefig(dest + 'ack_corruption.png')
     plt.close()
     delta_times_ack = []
-    #plt.show()
+
 
 def eval_data_loss():
     delta_times_data_loss = []
@@ -84,8 +85,8 @@ def eval_data_loss():
     for corruption_rate in corruption_rates:
         times = []
         for i in range(TRIALS):
-            r = Receiver()
-            c = Sender(data_percent_loss=corruption_rate)  # Create sender object
+            r = Receiver(data_percent_loss=corruption_rate)
+            c = Sender()  # Create sender object
 
             times.append(c.delta_time)
             print(f'data loss trial # {i}: rate at {corruption_rate}')
@@ -99,7 +100,7 @@ def eval_data_loss():
     plt.savefig(dest + 'data_loss.png')
     plt.close()
     delta_times_data_loss = []
-    #plt.show()
+
 
 def eval_ack_loss():
     delta_times_ack_loss = []
@@ -107,8 +108,8 @@ def eval_ack_loss():
     for corruption_rate in corruption_rates:
         times = []
         for i in range(TRIALS):
-            r = Receiver()
-            c = Sender(ack_percent_loss=corruption_rate)  # Create sender object
+            r = Receiver(seqnum_percent_loss=corruption_rate)
+            c = Sender()  # Create sender object
             print(f'ack loss trial # {i}: rate at {corruption_rate}')
             times.append(c.delta_time)
         delta_times_ack_loss.append(np.mean(times))
@@ -121,21 +122,11 @@ def eval_ack_loss():
     plt.savefig(dest + 'ack_loss.png')
     plt.close()
     delta_times_ack_loss = []
-    #plt.show()
+
 
 if __name__ == '__main__':
-
-    #eval_reg_data()
+    eval_reg_data()
     eval_data_corrupt()
     eval_ack_corrupt()
     eval_data_loss()
     eval_ack_loss()
-
-
-
-
-
-
-    #plt.close()
-    # data
-
