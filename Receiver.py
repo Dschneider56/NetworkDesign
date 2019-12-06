@@ -35,11 +35,12 @@ class Receiver:
         logging.debug('receiver - All packets have been received')
 
         # Join the packets to a bytes object
-        image = b''.join(packets[0:])
+        image = b''.join(packets[:])
+
         self.save_image(image)
         # Open the image to confirm the receiver could modify the original
         show_image = Image.open(io.BytesIO(image))
-        # show_image.show()
+        show_image.show()
 
     def save_image(self, image: bytes):
         # Save the file to be retransmitted to sender

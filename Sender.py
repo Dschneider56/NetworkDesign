@@ -4,7 +4,7 @@ import datetime as dt
 
 
 class Sender:
-    def __init__(self, file_name='island.bmp', timer_timeout=0.01):
+    def __init__(self, file_name='island.bmp', timer_timeout=0.005):
         """
         Send an image to receiver, then request a modified image back from the receiver.
         """

@@ -14,14 +14,145 @@ import datetime as dt
 To enable debugging statements, change the below level value to logging.DEBUG
 To disable them, change level to logging.CRITICAL
 """
-logging.basicConfig(level=logging.CRITICAL)  # For print statements, change CRITICAL to DEBUG. To disable them,
-                                            # change DEBUG to CRITICAL.
+logging.basicConfig(level=logging.DEBUG)
 
-SEQNUM_SIZE = 16  # Size of sequence number in bytes.
-CHECKSUM_SIZE = 16  # Size of checksum in bytes.
-PACKET_SIZE = 2048  # Size of a packet in bytes.
-INITIALIZE = b'\r\n'  # The terminator character sequence.
-TERMINATE = b'\n\r'  # The terminator character sequence.
+SEQNUM_SIZE = 16        # Size of sequence number in bytes.
+CHECKSUM_SIZE = 16      # Size of checksum in bytes.
+PACKET_SIZE = 2048      # Size of a packet in bytes.
+
+WINDOW_SIZE = 100        # The size of a window for go-back-n protocol
+#TIMEOUT = .06           # the timeout period of gbn in milliseconds
+
+INITIALIZE = b'\r\n'    # The terminator character sequence.
+TERMINATE = b'\n\r'     # The terminator character sequence.
+
+
+def send_packets(sock: socket, packets: list, addr_and_port: tuple):
+    """
+    Send a collection of packets to a destination address through a socket.
+
+    :param sock:            The socket object through which the packets will be sent
+    :param packets:         The collection of packets.
+    :param addr_and_port:   A tuple containing the destination address and destination port number
+    :param data_percent_loss:    The probability that we should lose the data the sender gets from the receiver
+    :param seqnum_percent_loss:    The probability that we should corrupt the ack the sender gets from the receiver
+
+    :return:                None
+    """
+    acked_packets = 0      # The number of the current packet being sent
+    window = []
+    timeout_period = .00001
+    next_seqnum = 0
+    base = 0
+    ref_time = time.time()
+    while acked_packets < len(packets) or len(window) > 0:
+
+        if next_seqnum < base + WINDOW_SIZE and acked_packets < len(packets) + 1:
+            try:
+                seqnum, checksum, data = parse_packet(packets[next_seqnum])      # Parse the packet being sent so the response can be compared
+            except:
+                print("DONE")
+                return
+            sock.sendto(packets[next_seqnum], addr_and_port)                 # Send the packet.
+            logging.debug(f"SEND_PACKETS: packet sent")
+            window.append(packets[next_seqnum])                     # The packet just sent gets added to the window
+            next_seqnum += 1                                        # Increment the next seqnum pointer
+
+        # Process ack and checksum from receiver
+        try:
+            received_data = sock.recv(CHECKSUM_SIZE + SEQNUM_SIZE)      # Receive an ack (seqnum)
+            recvd_seqnum, recvd_checksum, recvd_data = parse_packet(received_data)
+            if received_data == TERMINATE:      # break out of the loop upon receiving terminate
+                break
+
+            checksum_chk = get_hash(int_to_bytes_padded(recvd_seqnum))      # checksum of the received sequence number
+
+            if checksum_chk == recvd_checksum:    # The data is valid
+                while recvd_seqnum > base and len(window) > 0:   # move up the base
+                    ref_time = time.time()      # reset the timer
+                    window.pop(0)               # remove the packet at the current base
+                    base += 1                   # slide the window up
+
+        except:    # A timeout occurred; check if it was the main timer that expired
+            if time.time()-ref_time > 10*timeout_period:
+                #logging.error('SEND_PACKETS: resending the window')
+                for packet in window:
+                    sock.sendto(packet, addr_and_port)
+    print('DONE')
+
+def receive_packets(sock: socket, data_percent_corrupt=0, seqnum_percent_corrupt=0,
+                    data_percent_loss=0, seqnum_percent_loss=0) -> tuple:
+    """
+    Listen for packets coming in to a socket.
+
+    :param sock:    The socket that will be receiving packets.
+    :param data_percent_corrupt:    The probability that we should corrupt the data the receiver gets from the sender
+    :param seqnum_percent_corrupt:    The probability that we should corrupt the ack the receiver gets from the sender
+
+    :return:        the packets along with the address of the sender
+    """
+    packets = []
+    packets_received = 0
+    num_packets = 0
+    expected_seqnum = 0
+    prev_ack = b''
+    append_packet = True
+    while True:
+        append_packet = True
+        raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
+        rcvd_seqnum, rcvd_checksum, data = parse_packet(raw_data)  # Obtain the rcvd_seqnum, rcvd_checksum, and data from the packet
+
+        if lose_seqnum(seqnum_percent_loss) or lose_checksum(data_percent_loss):  # do nothing if packet shouldnt be sent back
+            continue
+        if packets_received == 0:   # The init was received
+            num_packets = int(data)     # store the number of packets to be received
+            packets_received += 1
+            append_packet = False
+
+        logging.debug(f"RECEIVE_PACKETS: ACK = {str(rcvd_seqnum)}")
+        # Provide a chance to corrupt the sequence number if the probability is > 0.
+        rcvd_seqnum = corrupt_ack(rcvd_seqnum, seqnum_percent_corrupt)
+        rcvd_checksum = corrupt_checksum(rcvd_checksum, data_percent_corrupt)
+
+        seqnum_check = get_hash(packets_received)
+
+        rcvd_data_checksum = get_hash(data)
+        if rcvd_data_checksum == rcvd_checksum:  # verify rcvd_checksum
+
+            if expected_seqnum == rcvd_seqnum:  # store the packet if it was the expected packet in the order
+                if append_packet:
+                    packets.append(data)    # only append the packet if it isnt the init packet
+                seqnum = int_to_bytes_padded(expected_seqnum)
+                checksum = get_hash(seqnum)
+                sock.sendto((seqnum + checksum), return_address)
+                expected_seqnum += 1
+            else:
+                seqnum = int_to_bytes_padded(expected_seqnum)
+                checksum = get_hash(seqnum)
+                sock.sendto((seqnum + checksum), return_address)
+        else:
+            pass
+
+        if expected_seqnum == num_packets:  # Once all packets have been received, signal sender to stop
+            logging.info("RECEIVE_PACKETS: Finished receiving packets")
+            sock.sendto(TERMINATE, return_address)
+            return packets, return_address
+
+
+def get_hash(item):
+    if isinstance(item, int):
+        return hashlib.md5(bytes(str(item), 'utf-8')).digest()
+    elif isinstance(item, bytes):
+        return hashlib.md5(item).digest()
+    elif isinstance(item, str):
+        return hashlib.md5(bytes(item), 'utf-8').digest()
+
+
+def int_to_bytes_padded(num):
+    packet_num_digits = len(str(num))  # get the number of packet_num digits (length of it)
+    seqnum = ''.join(['0' for _ in range(SEQNUM_SIZE - packet_num_digits)]) + str(num)
+    seqnum = bytes(seqnum, 'utf-8')
+    return seqnum
 
 
 def make_packet(data: bytes) -> list:
@@ -47,55 +178,13 @@ def make_packet(data: bytes) -> list:
             data = []           # set the data to an empty list to break from loop.
 
         checksum = hashlib.md5(raw_packet).digest()  # creates unique 16-byte hash value from raw_packet as a byte array
-        seqnum = hashlib.md5(bytes(str(packet_num), 'utf-8')).digest()    # does same as above but for sequence number
+        seqnum = int_to_bytes_padded(packet_num)
 
-        packet = seqnum + checksum + raw_packet    # Combine seqnum, checksum, & raw_packet into packet
+        packet = seqnum + checksum + raw_packet    # Combine rcvd_seqnum, checksum, & raw_packet into packet
         packets.append(packet)
         packet_num += 1
 
     return packets
-
-
-def send_packets(sock: socket, packets: list, addr_and_port: tuple):
-    """
-    Send a collection of packets to a destination address through a socket.
-
-    :param sock:            The socket object through which the packets will be sent
-    :param packets:         The collection of packets.
-    :param addr_and_port:   A tuple containing the destination address and destination port number
-    :param data_percent_loss:    The probability that we should lose the data the sender gets from the receiver
-    :param seqnum_percent_loss:    The probability that we should corrupt the ack the sender gets from the receiver
-
-    :return:                None
-    """
-    cur_packet_num = 0      # The number of the current packet being sent
-    while cur_packet_num < len(packets):
-        logging.debug(f"SEND_PACKETS: inside for loop for packet {str(cur_packet_num)}")
-        seqnum, checksum, data = parse_packet(packets[cur_packet_num])   # Parse the packet being sent so the response can be compared
-        sock.sendto(packets[cur_packet_num], addr_and_port)  # Send the packet.
-
-        # Process ack and checksum from receiver
-        try:
-            received_data = sock.recv(CHECKSUM_SIZE + SEQNUM_SIZE)      # Receive an ack (seqnum)
-            recvd_seqnum, recvd_checksum, recvd_data = parse_packet(received_data)
-
-            if received_data == TERMINATE:      # break out of the loop upon receiving terminate
-                break
-        except:    # A timeout (probably) occurred; go to the top of the loop
-            logging.error('SEND_PACKETS: timeout occured')
-            continue
-
-        logging.debug(f'SEND_PACKETS: received data: {received_data}')
-
-        if (recvd_seqnum == seqnum) and (recvd_checksum == checksum):   # Case 1: both seqnum and checksum are verified
-            logging.debug(f"SEND_PACKETS: seqnum and checksum received for packet {str(cur_packet_num)}")
-            cur_packet_num += 1
-        elif recvd_seqnum != seqnum:
-            logging.error(f"SEND_PACKETS ERROR: Invalid seqnum from packet {str(cur_packet_num)}, resend data")
-        else:
-            logging.error(f"SEND_PACKETS ERROR: Invalid checksum from packet {str(cur_packet_num)}, resend data")
-
-    logging.info('SEND_PACKETS: Transmission complete\n')
 
 
 def parse_packet(raw_data: bytes) -> tuple:
@@ -107,67 +196,11 @@ def parse_packet(raw_data: bytes) -> tuple:
     :return: A tuple containing the sequence number, checksum, and packet contents
     """
 
-    seqnum = raw_data[:SEQNUM_SIZE]
+    seqnum = int(raw_data[:SEQNUM_SIZE])
     checksum = raw_data[SEQNUM_SIZE:SEQNUM_SIZE + CHECKSUM_SIZE]
     data = raw_data[SEQNUM_SIZE + CHECKSUM_SIZE:]
 
     return seqnum, checksum, data
-
-
-def receive_packets(sock: socket, data_percent_corrupt=0, seqnum_percent_corrupt=0,
-                    data_percent_loss=0, seqnum_percent_loss=0) -> tuple:
-    """
-    Listen for packets coming in to a socket.
-
-    :param sock:    The socket that will be receiving packets.
-    :param data_percent_corrupt:    The probability that we should corrupt the data the receiver gets from the sender
-    :param seqnum_percent_corrupt:    The probability that we should corrupt the ack the receiver gets from the sender
-
-    :return:        the packets along with the address of the sender
-    """
-    packets = []
-    packets_received = 0
-    num_packets = 0
-    prev_ack = b''
-    while True:
-        raw_data, return_address = sock.recvfrom(4096)  # Receive a packet
-        seqnum, checksum, data = parse_packet(raw_data)  # Obtain the seqnum, checksum, and data from the packet
-
-        if lose_seqnum(seqnum_percent_loss) or lose_checksum(data_percent_loss):  # do nothing if packet shouldnt be sent back
-            continue
-        if packets_received == 0:   # The init was received
-            num_packets = int(data)     # store the number of packets to be received
-
-        logging.debug(f"RECEIVE_PACKETS: ACK = {str(seqnum)}")
-
-        # Provide a chance to corrupt the sequence number if the probability is > 0.
-        seqnum = corrupt_ack(seqnum, seqnum_percent_corrupt)
-        seqnum_check = hashlib.md5(bytes(str(packets_received), 'utf-8')).digest()
-
-        if seqnum_check != seqnum:  # Case 1: The sequence number isnt the desired one
-            logging.error(f"RECEIVE_PACKETS ERROR: ACK  {str(seqnum_check)} invalid for packet {str(packets_received)}")
-            sock.sendto(prev_ack, return_address)
-
-        else:   # Case 2: the sequence number is correct
-            checksum_check = hashlib.md5(data).digest()  # Create hash for the current packet's data
-            checksum_check = corrupt_checksum(checksum_check, data_percent_corrupt)  # chance to corrupt checksum
-
-            if checksum_check != checksum:  # Sub-case 1: The data was corrupted
-                logging.error(f"RECEIVE_PACKETS ERROR: packet {str(packets_received)} checksum mismatch")
-                sock.sendto(prev_ack, return_address)
-
-            else:   # Sub-case 2: The data is intact
-                if packets_received > 0:
-                    packets.append(data)  # Successful, add the received packet to a list and repeat.
-                logging.debug("RECEIVE_PACKETS: Received packet successfully")
-                prev_ack = seqnum + checksum
-                sock.sendto(prev_ack, return_address)   # Send response back to sender when everything is correct
-                packets_received += 1
-
-                if packets_received == num_packets:     # Once all packets have been received, signal sender to stop
-                    logging.info("RECEIVE_PACKETS: Finished receiving packets")
-                    sock.sendto(TERMINATE, return_address)
-                    return packets, return_address
 
 
 def corrupt_checksum(checksum: bytes, probability: float) -> bytes:
@@ -193,21 +226,25 @@ def corrupt_checksum(checksum: bytes, probability: float) -> bytes:
         return checksum
 
 
-def corrupt_ack(ack_bit: int, probability: float) -> int:
+def corrupt_ack(seqnum: bytes, probability: float) -> bytes:
     if probability == 0:
         # If corruption probability is 0 then simply return the ack bit
-        return ack_bit
+        return seqnum
 
     assert (0 <= probability < 1)
     probability *= 100  # Turn the percentage into an integer
     rand_num2 = rnd.randint(0, 100)
     if probability > rand_num2:
-        logging.debug("ack corrupt!")
-        first_half = ack_bit[:int(SEQNUM_SIZE / 2)]
-        second_half = ack_bit[int(SEQNUM_SIZE / 2):]
-        return second_half + first_half
+        #logging.debug("ack corrupt!")
+        #first_half = seqnum[:int(SEQNUM_SIZE / 2)]
+        #second_half = seqnum[int(SEQNUM_SIZE / 2):]
+        #return second_half + first_half
+        if int(seqnum) == 0:
+            return int_to_bytes_padded(1)
+        else:
+            return int_to_bytes_padded(int(int(seqnum)/2))
     else:
-        return ack_bit
+        return seqnum
 
 
 def lose_checksum(probability: float) -> bool:
