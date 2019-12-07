@@ -64,45 +64,64 @@ def send_packets(sock: socket, packets: list, addr_and_port: tuple):
     :return:                None
     """
     base = 0
+    packets_pending = 0
+    next_packet_num = 0
+    expected_seq_num = 0
 
     while base < len(packets) + 1:
 
         # Send a window of packets to the receiver
-        for next_sequence_num in range(base, base + WINDOW_SIZE + 1):
-            if next_sequence_num < len(packets):
-                sock.sendto(packets[next_sequence_num], addr_and_port)  # Send the packet.
+        for current_sequence_num in range(base, base + WINDOW_SIZE + 1):
+            if current_sequence_num < len(packets):
+                sock.sendto(packets[current_sequence_num], addr_and_port)  # Send the packet.
+                packets_pending += 1
+                next_packet_num = (current_sequence_num + 1)
 
         # Receive a window of packets
         exit_loop = False
         reference_time = time.time()
-        for next_sequence_num in range(base, base + WINDOW_SIZE + 1):
+        while packets_pending > 0:
             if exit_loop:
                 break
-            if next_sequence_num < len(packets):
-                try:
-                    received_data = sock.recv(CHECKSUM_SIZE + SEQNUM_SIZE)      # Receive an ack (seqnum)
-                    if received_data == b'':
-                        exit_loop = True
-                        break
+            try:
+                received_data = sock.recv(CHECKSUM_SIZE + SEQNUM_SIZE)      # Receive an ack (seqnum)
+                if received_data == b'':
+                    packets_pending -= 1
+                    break
 
-                    recvd_seqnum, recvd_checksum, recvd_data = parse_packet(received_data)
-                    recvd_seqnum = int.from_bytes(recvd_seqnum, "little")
+                recvd_seqnum, recvd_checksum, recvd_data = parse_packet(received_data)
+                recvd_seqnum = int.from_bytes(recvd_seqnum, "little")
+                packets_pending -= 1    # One less packet pending since it has been received
 
-                    logging.debug(f'SEND_PACKETS: received data: {received_data}')
+                # Since we received a packet, we may slide the window over and send another
+                logging.debug(f'SEND_PACKETS: received data: {received_data}')
+                reference_time = time.time()
 
-                    base = int(recvd_seqnum) + 1   # does same as above but for sequence number
-                    reference_time = time.time()
+                if expected_seq_num == recvd_seqnum:
+                    expected_seq_num += 1
+                    base = recvd_seqnum + 1  # does same as above but for sequence number
+                    if next_packet_num < len(packets):
+                        sock.sendto(packets[next_packet_num], addr_and_port)
+                        next_packet_num += 1
+                        packets_pending += 1
 
-                    if base >= len(packets):
-                        # Once the receiver has gotten all of the packets, send a terminator and exit the loop
-                        sock.sendto(TERMINATE, addr_and_port)
-                        return
+                else:
+                    sock.sendto(packets[expected_seq_num], addr_and_port)
+                    next_packet_num += 1
+                    packets_pending += 1
 
-                except:    # A timeout occurred; go to the top of the while loop
-                    logging.error('SEND_PACKETS: timeout occured')
-                    if (time.time() - reference_time) > 0.01:
-                        exit_loop = True
-                    continue
+                if base >= len(packets):
+                    # Once the receiver has gotten all of the packets, send a terminator and exit the loop
+                    sock.sendto(TERMINATE, addr_and_port)
+                    return
+
+            except Exception as e:    # A timeout occurred; go to the top of the while loop
+                # print(e)
+                logging.error('SEND_PACKETS: timeout occurred')
+                packets_pending -= 1
+                if (time.time() - reference_time) > 0.01:
+                    exit_loop = True
+                continue
 
 
 def parse_packet(raw_data: bytes) -> tuple:
